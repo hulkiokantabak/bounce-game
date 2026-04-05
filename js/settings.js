@@ -189,63 +189,77 @@ export class Settings {
 
   // --- Canvas rendering: gear icon on menu ---
 
-  renderGearIcon(ctx, gameWidth, gameHeight, scale, menuPulseTime, isFirstVisit) {
-    const x = 30 * scale;
-    const y = gameHeight - 30 * scale;
-    const r = 10 * scale;
+  renderSettingsButton(ctx, gameWidth, gameHeight, scale, menuPulseTime, isFirstVisit) {
+    const x = gameWidth / 2;
+    const y = gameHeight / 2 + 120 * scale;
 
-    // Brighter on first visit to draw attention
-    const baseAlpha = isFirstVisit ? 0.35 : 0.2;
-    const breathe = baseAlpha + 0.1 * Math.sin(menuPulseTime * 1.5 + 1);
+    // Clear, readable button — not a hidden icon
+    const breathe = 0.35 + 0.1 * Math.sin(menuPulseTime * 1.5 + 1);
 
     ctx.save();
     ctx.globalAlpha = breathe;
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1.5 * scale;
-
-    // Gear shape — circle with notches
-    ctx.beginPath();
-    ctx.arc(x, y, r * 0.5, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Gear teeth
-    const teeth = 6;
-    for (let i = 0; i < teeth; i++) {
-      const angle = (Math.PI * 2 / teeth) * i;
-      const ix = x + Math.cos(angle) * r * 0.35;
-      const iy = y + Math.sin(angle) * r * 0.35;
-      const ox = x + Math.cos(angle) * r * 0.75;
-      const oy = y + Math.sin(angle) * r * 0.75;
-      ctx.beginPath();
-      ctx.moveTo(ix, iy);
-      ctx.lineTo(ox, oy);
-      ctx.stroke();
-    }
-
-    // Center dot
     ctx.fillStyle = '#ffffff';
-    ctx.globalAlpha = breathe * 0.8;
-    ctx.beginPath();
-    ctx.arc(x, y, 1.5 * scale, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.font = `${Math.round(13 * scale)}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
 
-    // AI demo active indicator — blue dot
-    if (this.values.aiDemo) {
-      ctx.globalAlpha = 0.5 + 0.2 * Math.sin(menuPulseTime * 3);
-      ctx.fillStyle = '#88ccff';
-      ctx.beginPath();
-      ctx.arc(x + r * 0.7, y - r * 0.7, 2.5 * scale, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    let label = 'settings';
+    if (this.values.aiDemo) label = 'settings · AI on';
+
+    ctx.fillText(label, x, y);
+
+    // Underline for button affordance
+    const textWidth = ctx.measureText(label).width;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 0.5 * scale;
+    ctx.globalAlpha = breathe * 0.4;
+    ctx.beginPath();
+    ctx.moveTo(x - textWidth / 2, y + 9 * scale);
+    ctx.lineTo(x + textWidth / 2, y + 9 * scale);
+    ctx.stroke();
 
     ctx.restore();
   }
 
-  isGearTap(x, y, gameWidth, gameHeight, scale) {
-    const gx = 30 * scale;
-    const gy = gameHeight - 30 * scale;
-    const hitSize = 30 * scale;
-    return x > gx - hitSize && x < gx + hitSize &&
-           y > gy - hitSize && y < gy + hitSize;
+  isSettingsTap(x, y, gameWidth, gameHeight, scale) {
+    const bx = gameWidth / 2;
+    const by = gameHeight / 2 + 120 * scale;
+    const hitW = 80 * scale;
+    const hitH = 25 * scale;
+    return x > bx - hitW && x < bx + hitW &&
+           y > by - hitH && y < by + hitH;
+  }
+
+  // --- Exit button during gameplay ---
+
+  renderExitButton(ctx, gameWidth, gameHeight, scale) {
+    // Top-right corner — away from score (top-left)
+    const x = gameWidth - 20 * scale;
+    const y = 18 * scale;
+    const size = 8 * scale;
+
+    ctx.save();
+    ctx.globalAlpha = 0.2;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.5 * scale;
+    ctx.lineCap = 'round';
+
+    // X shape for quit
+    ctx.beginPath();
+    ctx.moveTo(x - size, y - size);
+    ctx.lineTo(x + size, y + size);
+    ctx.moveTo(x + size, y - size);
+    ctx.lineTo(x - size, y + size);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  isExitTap(x, y, gameWidth, scale) {
+    const ex = gameWidth - 20 * scale;
+    const ey = 18 * scale;
+    const hitSize = 25 * scale;
+    return x > ex - hitSize && x < ex + hitSize &&
+           y > ey - hitSize && y < ey + hitSize;
   }
 }

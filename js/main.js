@@ -132,7 +132,7 @@ class Game {
     switch (this.state) {
       case State.MENU:
         if (this.settings.isOpen) break; // settings panel absorbs taps
-        if (this.settings.isGearTap(x, y, this.renderer.gameWidth, this.renderer.gameHeight, this.renderer.scale)) {
+        if (this.settings.isSettingsTap(x, y, this.renderer.gameWidth, this.renderer.gameHeight, this.renderer.scale)) {
           this.settings.show(() => { /* settings closed */ });
         } else if (this.ui.isLeaderboardIconTap(x, y, this.renderer)) {
           this.state = State.LEADERBOARD;
@@ -145,6 +145,19 @@ class Game {
 
       case State.DROPPING:
       case State.RING_HIT:
+        // Exit button — top-left back arrow returns to menu
+        if (this.settings.isExitTap(x, y, this.renderer.gameWidth, this.renderer.scale)) {
+          this._playAudio('stopWindSound');
+          this._playAudio('stopGravityHum');
+          this._gravityHumActive = false;
+          this.gravityPulse = false;
+          this.state = State.MENU;
+          this.ball = null;
+          this.surfaces.clear();
+          this.ringManager.clear();
+          this.fetchConstellations();
+          break;
+        }
         if (!this.isInDeadZone(y)) {
           // Cap surfaces to prevent performance issues
           if (this.surfaces.surfaces.length >= CONFIG.MAX_SURFACES) {
@@ -182,6 +195,15 @@ class Game {
         break;
 
       case State.RUN_OVER:
+        // Exit button returns to menu from run-over screen too
+        if (this.settings.isExitTap(x, y, this.renderer.gameWidth, this.renderer.scale)) {
+          this.state = State.MENU;
+          this.ball = null;
+          this.surfaces.clear();
+          this.ringManager.clear();
+          this.fetchConstellations();
+          break;
+        }
         if (this.runEndInputReady) {
           if (this.isSaveTap(x, y)) {
             this.handleSaveTap();
@@ -914,9 +936,9 @@ class Game {
       this.renderGhostTrails(ctx, gameWidth, gameHeight);
       this.renderConstellations(ctx, gameWidth, gameHeight);
       this.ui.renderMenu(ctx, gameWidth, gameHeight, scale, this.scoreManager.personalBest, this.lifetime);
-      // Settings gear icon (bottom-left, opposite leaderboard icon)
+      // Settings button — centered below menu text
       const isFirstVisit = this.lifetime.stats.totalRuns <= 1;
-      this.settings.renderGearIcon(ctx, gameWidth, gameHeight, scale, this.ui.menuPulseTime, isFirstVisit);
+      this.settings.renderSettingsButton(ctx, gameWidth, gameHeight, scale, this.ui.menuPulseTime, isFirstVisit);
       ctx.restore();
       return;
     }
@@ -1077,6 +1099,9 @@ class Game {
       // Bounce multiplier preview
       this.ui.renderBounceMultiplier(ctx, this.ball, scale, this.scoreManager.bounceCount);
 
+      // Exit button — back arrow top-left
+      this.settings.renderExitButton(ctx, gameWidth, gameHeight, scale);
+
       // Wind indicator
       if (Math.abs(this.wind) > 5) {
         ctx.save();
@@ -1200,6 +1225,8 @@ class Game {
     if (isRunOver) {
       this.ui._runEndBounces = this.runBounceTotal;
       this.ui.renderRunEnd(ctx, gameWidth, gameHeight, scale, this.scoreManager, this.runEndTimer, this.lifetime);
+      // Exit button on run-over screen
+      this.settings.renderExitButton(ctx, gameWidth, gameHeight, scale);
     }
 
     ctx.restore();
