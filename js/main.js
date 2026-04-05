@@ -1338,20 +1338,15 @@ class Game {
       // Exit button — back arrow top-left
       this.settings.renderExitButton(ctx, gameWidth, gameHeight, scale);
 
-      // Wind indicator
+      // Wind indicator — arrows only, no text label
       if (Math.abs(this.wind) > 5) {
         ctx.save();
-        const windAlpha = Math.min(Math.abs(this.wind) / CONFIG.WIND_STRENGTH_MAX, 1) * 0.25;
+        const windAlpha = Math.min(Math.abs(this.wind) / CONFIG.WIND_STRENGTH_MAX, 1) * 0.2;
         ctx.globalAlpha = windAlpha;
-        ctx.fillStyle = '#88ccff';
-        ctx.font = `${Math.round(9 * scale)}px monospace`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.fillText('wind', gameWidth / 2, 3 * scale);
         ctx.strokeStyle = '#88ccff';
         ctx.lineWidth = 1;
         const windDir = this.wind > 0 ? 1 : -1;
-        const windX = gameWidth / 2 + windDir * 30 * scale;
+        const windX = gameWidth / 2 + windDir * 20 * scale;
         const windY = 8 * scale;
         for (let i = 0; i < 3; i++) {
           const ox = (i - 1) * 12 * scale;
@@ -1376,21 +1371,12 @@ class Game {
         ctx.restore();
       }
 
-      // Gravity pulse indicator + subtle screen tint
+      // Gravity pulse indicator — subtle screen tint only, no text label
       if (this.gravityPulse) {
         ctx.save();
         ctx.globalAlpha = 0.02 + 0.01 * Math.sin(this.gameTime * 4);
         ctx.fillStyle = '#8888ff';
         ctx.fillRect(0, 0, gameWidth, gameHeight);
-        ctx.restore();
-
-        ctx.save();
-        ctx.globalAlpha = 0.2 + 0.05 * Math.sin(this.gameTime * 6);
-        ctx.fillStyle = '#aabbff';
-        ctx.font = `${Math.round(11 * scale)}px monospace`;
-        ctx.textAlign = 'right';
-        ctx.textBaseline = 'top';
-        ctx.fillText('low-g', gameWidth - 12 * scale, 32 * scale);
         ctx.restore();
       }
       // Progressive hint system — fades out after R3
@@ -1478,7 +1464,7 @@ class Game {
 
     if (isRunOver) {
       this.ui._runEndBounces = this.runBounceTotal;
-      this.ui.renderRunEnd(ctx, gameWidth, gameHeight, scale, this.scoreManager, this.runEndTimer, this.lifetime);
+      this.ui.renderRunEnd(ctx, gameWidth, gameHeight, scale, this.scoreManager, this.runEndTimer, this.lifetime, this.runDuration);
       // Exit button on run-over screen
       this.settings.renderExitButton(ctx, gameWidth, gameHeight, scale);
     }

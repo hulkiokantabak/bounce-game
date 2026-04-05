@@ -718,7 +718,7 @@ export class UI {
     ctx.restore();
   }
 
-  renderRunEnd(ctx, gameWidth, gameHeight, scale, scoreManager, timer, lifetime) {
+  renderRunEnd(ctx, gameWidth, gameHeight, scale, scoreManager, timer, lifetime, runDuration) {
     const p1End = CONFIG.RUN_END_PAUSE;
     const p2End = p1End + CONFIG.RUN_END_TRAIL_HOLD;
     const p3End = p2End + CONFIG.RUN_END_SCORE_FADE;
@@ -738,10 +738,16 @@ export class UI {
       ctx.font = `bold ${Math.round(36 * scale)}px monospace`;
       ctx.fillText(scoreManager.score.toLocaleString(), gameWidth / 2, gameHeight * 0.35);
 
-      // Rounds
+      // Rounds + duration
       ctx.globalAlpha = fadeProgress * 0.5;
       ctx.font = `${Math.round(16 * scale)}px monospace`;
       ctx.fillText(`${scoreManager.round} ${scoreManager.round === 1 ? 'round' : 'rounds'}`, gameWidth / 2, gameHeight * 0.35 + 40 * scale);
+
+      if (runDuration > 0) {
+        ctx.globalAlpha = fadeProgress * 0.3;
+        ctx.font = `${Math.round(13 * scale)}px monospace`;
+        ctx.fillText(`${Math.round(runDuration)}s`, gameWidth / 2, gameHeight * 0.35 + 62 * scale);
+      }
 
       // Personal best line
       const extraY = 0;
