@@ -22,7 +22,8 @@ export class Ball {
     this.vy = 0;
 
     this.alive = true;
-    this.opacity = 1;
+    this.opacity = 0; // Fade in
+    this.fadeInTimer = 0;
 
     // Trail
     this.trail = [];
@@ -56,6 +57,12 @@ export class Ball {
     this.x += this.vx * dt;
     this.y += this.vy * dt;
 
+    // Fade-in
+    if (this.fadeInTimer < 0.2) {
+      this.fadeInTimer += dt;
+      this.opacity = Math.min(1, this.fadeInTimer / 0.2);
+    }
+
     // Trail brighten decay
     if (this.trailBrighten > 0) {
       this.trailBrighten = Math.max(0, this.trailBrighten - dt);
@@ -63,13 +70,15 @@ export class Ball {
   }
 
   checkWalls(gameWidth) {
-    // Silent, invisible, zero feedback
+    this.wallHit = null;
     if (this.x - this.radius < 0) {
       this.x = this.radius;
       this.vx = Math.abs(this.vx) * CONFIG.WALL_RESTITUTION;
+      this.wallHit = { x: 0, y: this.y };
     } else if (this.x + this.radius > gameWidth) {
       this.x = gameWidth - this.radius;
       this.vx = -Math.abs(this.vx) * CONFIG.WALL_RESTITUTION;
+      this.wallHit = { x: gameWidth, y: this.y };
     }
   }
 

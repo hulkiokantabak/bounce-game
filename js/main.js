@@ -175,6 +175,7 @@ class Game {
   }
 
   startNewRun() {
+    this.ui.triggerTransitionDip();
     this.scoreManager.reset();
     this.surfaces.clear();
     this.ringManager.clear();
@@ -241,7 +242,7 @@ class Game {
     const { ring, ringIndex } = result;
     this.ringManager.onRingSuccess(ringIndex, this.ball);
     this.ball.brightenTrail();
-    this.audio.playRingChime();
+    this.audio.playRingChime(this.scoreManager.streak);
     vibrate(CONFIG.RING_VIBRATE);
 
     // Record ring success
@@ -275,6 +276,11 @@ class Game {
     // Update trail color based on streak
     if (this.ball) {
       this.ball.setTrailColorForStreak(this.scoreManager.streak);
+    }
+
+    // Score explanation on very first ring success
+    if (this.scoreManager.round <= 2 && this.scoreManager.streak === 1) {
+      this.ui.showHint('fewer bounces = more points', ring.cx, ring.cy + ring.radius + 25 * this.renderer.scale);
     }
 
     // Check if we just exceeded personal best mid-run
@@ -392,16 +398,21 @@ class Game {
         this.ball.update(dt);
         this.ball.checkWalls(this.renderer.gameWidth);
 
+        // Wall bounce feedback
+        if (this.ball.wallHit) {
+          this.audio.playWallBounce();
+          this.ui.addWallImpact(this.ball.wallHit.x, this.ball.wallHit.y);
+        }
+
         if (this.surfaces.checkCollision(this.ball)) {
           const isFirstBounce = this.scoreManager.bounceCount === 0 && this.scoreManager.round <= 2;
           this.scoreManager.onBounce();
           const speed = Math.sqrt(this.ball.vx * this.ball.vx + this.ball.vy * this.ball.vy) / this.ball.scale;
           this.audio.playBounce(speed);
           vibrate(isFirstBounce ? 30 : CONFIG.BOUNCE_VIBRATE);
-          this.renderer.shake();
-          if (isFirstBounce) {
-            this.renderer.shake(); // double shake for emphasis
-          }
+          // Speed-scaled shake
+          const shakeIntensity = Math.min(speed / 600, 2.0);
+          this.renderer.shake(isFirstBounce ? 2.0 : shakeIntensity);
         }
 
         this.ball.addTrailPoint(this.gameTime);
@@ -423,6 +434,7 @@ class Game {
         }
 
         if (this.ball.checkFloor(this.renderer.gameHeight)) {
+          this.ui.addDeathSplash(this.ball.x, this.renderer.gameHeight);
           this.endRun('floor');
         }
 
@@ -543,10 +555,17 @@ class Game {
     // Surface flashes
     if (!inTrailHold) {
       this.ui.renderSurfaceFlashes(ctx, scale);
+      this.ui.renderWallImpacts(ctx, scale);
     }
+
+    // Death splashes
+    this.ui.renderDeathSplashes(ctx, scale);
 
     // Particles (ring success)
     this.ui.renderParticles(ctx, scale);
+
+    // Hints
+    this.ui.renderHints(ctx, scale);
 
     if (this.state === State.DROPPING || this.state === State.RING_HIT) {
       this.ui.renderScore(ctx, gameWidth, gameHeight, scale, this.scoreManager);
@@ -575,6 +594,9 @@ class Game {
     }
 
     ctx.restore();
+
+    // Transition dip
+    this.ui.renderTransitionDip(ctx, gameWidth, gameHeight);
 
     // Pause overlay (rendered outside screen shake transform)
     if (this.paused && this.state !== State.MENU) {

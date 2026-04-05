@@ -44,16 +44,17 @@ export class Renderer {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  shake() {
+  shake(intensity) {
     this.shakeTimer = CONFIG.SCREEN_SHAKE_DURATION / 1000;
+    this.shakeIntensity = intensity || 1.0;
   }
 
   updateShake(dt) {
     if (this.shakeTimer > 0) {
       this.shakeTimer = Math.max(0, this.shakeTimer - dt);
       const intensity = this.shakeTimer / (CONFIG.SCREEN_SHAKE_DURATION / 1000);
-      this.shakeX = (Math.random() * 2 - 1) * CONFIG.SCREEN_SHAKE_PX * this.scale * intensity;
-      this.shakeY = (Math.random() * 2 - 1) * CONFIG.SCREEN_SHAKE_PX * this.scale * intensity;
+      this.shakeX = (Math.random() * 2 - 1) * CONFIG.SCREEN_SHAKE_PX * this.scale * intensity * (this.shakeIntensity || 1);
+      this.shakeY = (Math.random() * 2 - 1) * CONFIG.SCREEN_SHAKE_PX * this.scale * intensity * (this.shakeIntensity || 1);
     } else {
       this.shakeX = 0;
       this.shakeY = 0;

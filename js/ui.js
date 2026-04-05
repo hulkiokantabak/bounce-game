@@ -7,6 +7,10 @@ export class UI {
     this.pbFlashTimer = 0;
     this.surfaceFlashes = [];
     this.particles = [];
+    this.wallImpacts = [];
+    this.deathSplashes = [];
+    this.hints = [];
+    this.transitionDip = 0;
   }
 
   updateMenu(dt) {
@@ -38,6 +42,23 @@ export class UI {
       p.life -= dt;
     }
     this.particles = this.particles.filter(p => p.life > 0);
+
+    // Wall impacts
+    for (const w of this.wallImpacts) w.timer += dt;
+    this.wallImpacts = this.wallImpacts.filter(w => w.timer < 0.15);
+
+    // Death splashes
+    for (const d of this.deathSplashes) d.timer += dt;
+    this.deathSplashes = this.deathSplashes.filter(d => d.timer < 0.4);
+
+    // Hints
+    for (const h of this.hints) h.timer += dt;
+    this.hints = this.hints.filter(h => h.timer < 2.0);
+
+    // Transition dip
+    if (this.transitionDip > 0) {
+      this.transitionDip = Math.max(0, this.transitionDip - dt * 12);
+    }
   }
 
   addScorePop(x, y, score, isStreak, isClean) {
@@ -63,6 +84,22 @@ export class UI {
         maxLife: CONFIG.PARTICLE_LIFE,
       });
     }
+  }
+
+  addWallImpact(x, y) {
+    this.wallImpacts.push({ x, y, timer: 0 });
+  }
+
+  addDeathSplash(x, y) {
+    this.deathSplashes.push({ x, y, timer: 0 });
+  }
+
+  showHint(text, x, y) {
+    this.hints.push({ text, x, y, timer: 0 });
+  }
+
+  triggerTransitionDip() {
+    this.transitionDip = 1.0;
   }
 
   triggerPBFlash() {
@@ -261,6 +298,66 @@ export class UI {
     }
   }
 
+  renderWallImpacts(ctx, scale) {
+    for (const w of this.wallImpacts) {
+      const progress = w.timer / 0.15;
+      const alpha = 0.4 * (1 - progress);
+      const radius = (3 + 5 * progress) * scale;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(w.x, w.y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  renderDeathSplashes(ctx, scale) {
+    for (const d of this.deathSplashes) {
+      const progress = d.timer / 0.4;
+      const alpha = 0.3 * (1 - progress);
+      const width = (30 + 60 * progress) * scale;
+      const height = (2 + 4 * progress) * scale;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(d.x, d.y, width / 2, height / 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  renderHints(ctx, scale) {
+    for (const h of this.hints) {
+      const fadeIn = Math.min(h.timer / 0.3, 1);
+      const fadeOut = h.timer > 1.5 ? 1 - (h.timer - 1.5) / 0.5 : 1;
+      const alpha = 0.2 * fadeIn * fadeOut;
+      if (alpha <= 0) continue;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `${Math.round(11 * scale)}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(h.text, h.x, h.y);
+      ctx.restore();
+    }
+  }
+
+  renderTransitionDip(ctx, gameWidth, gameHeight) {
+    if (this.transitionDip <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = this.transitionDip * 0.3;
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, gameWidth, gameHeight);
+    ctx.restore();
+  }
+
   renderPauseOverlay(ctx, gameWidth, gameHeight, scale) {
     ctx.save();
     ctx.globalAlpha = 0.5;
@@ -299,16 +396,16 @@ export class UI {
       // Total score
       ctx.globalAlpha = fadeProgress * 0.8;
       ctx.font = `bold ${Math.round(36 * scale)}px monospace`;
-      ctx.fillText(scoreManager.score.toLocaleString(), gameWidth / 2, gameHeight * 0.40);
+      ctx.fillText(scoreManager.score.toLocaleString(), gameWidth / 2, gameHeight * 0.35);
 
       // Rounds
       ctx.globalAlpha = fadeProgress * 0.5;
       ctx.font = `${Math.round(16 * scale)}px monospace`;
-      ctx.fillText(`${scoreManager.round} rounds`, gameWidth / 2, gameHeight * 0.40 + 40 * scale);
+      ctx.fillText(`${scoreManager.round} rounds`, gameWidth / 2, gameHeight * 0.35 + 40 * scale);
 
       // Longest streak
       if (scoreManager.longestStreak >= CONFIG.STREAK_DISPLAY_THRESHOLD) {
-        ctx.fillText(`${scoreManager.longestStreak} streak`, gameWidth / 2, gameHeight * 0.40 + 65 * scale);
+        ctx.fillText(`${scoreManager.longestStreak} streak`, gameWidth / 2, gameHeight * 0.35 + 65 * scale);
       }
 
       // Personal best line
@@ -316,12 +413,12 @@ export class UI {
         ctx.globalAlpha = fadeProgress * 0.7;
         ctx.fillStyle = CONFIG.RING_COLOR;
         ctx.font = `bold ${Math.round(14 * scale)}px monospace`;
-        ctx.fillText('NEW BEST!', gameWidth / 2, gameHeight * 0.40 + 90 * scale);
+        ctx.fillText('NEW BEST!', gameWidth / 2, gameHeight * 0.35 + 90 * scale);
       } else if (scoreManager.personalBest > 0) {
         ctx.globalAlpha = fadeProgress * 0.25;
         ctx.fillStyle = '#ffffff';
         ctx.font = `${Math.round(13 * scale)}px monospace`;
-        ctx.fillText(`best: ${scoreManager.personalBest.toLocaleString()}`, gameWidth / 2, gameHeight * 0.40 + 90 * scale);
+        ctx.fillText(`best: ${scoreManager.personalBest.toLocaleString()}`, gameWidth / 2, gameHeight * 0.35 + 90 * scale);
       }
 
       ctx.restore();

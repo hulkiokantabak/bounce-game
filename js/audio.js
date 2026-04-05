@@ -19,7 +19,7 @@ export class AudioManager {
   playBounce(speed) {
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
-    const freq = CONFIG.BOUNCE_SOUND_BASE_FREQ + speed * CONFIG.BOUNCE_SOUND_SPEED_SCALE;
+    const freq = CONFIG.BOUNCE_SOUND_BASE_FREQ + speed * CONFIG.BOUNCE_SOUND_SPEED_SCALE * 1.5;
 
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
@@ -39,6 +39,24 @@ export class AudioManager {
     osc.stop(now + 0.1);
   }
 
+  playWallBounce() {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(200, now);
+    osc.frequency.exponentialRampToValueAtTime(100, now + 0.04);
+    gain.gain.setValueAtTime(0.08, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.04);
+  }
+
   playPlace() {
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
@@ -56,15 +74,19 @@ export class AudioManager {
     osc.stop(now + 0.05);
   }
 
-  playRingChime() {
+  playRingChime(streak) {
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
+
+    // Pitch rises with streak for escalating excitement
+    const pitchMult = 1 + (streak || 0) * 0.05;
+    const baseFreq = CONFIG.RING_CHIME_FREQ * pitchMult;
 
     // Fundamental
     const osc1 = this.ctx.createOscillator();
     const gain1 = this.ctx.createGain();
     osc1.type = 'sine';
-    osc1.frequency.setValueAtTime(CONFIG.RING_CHIME_FREQ, now);
+    osc1.frequency.setValueAtTime(baseFreq, now);
     gain1.gain.setValueAtTime(0.25, now);
     gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
     osc1.connect(gain1);
@@ -76,13 +98,25 @@ export class AudioManager {
     const osc2 = this.ctx.createOscillator();
     const gain2 = this.ctx.createGain();
     osc2.type = 'sine';
-    osc2.frequency.setValueAtTime(CONFIG.RING_CHIME_FREQ * 2, now);
+    osc2.frequency.setValueAtTime(baseFreq * 2, now);
     gain2.gain.setValueAtTime(0.1, now);
     gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
     osc2.connect(gain2);
     gain2.connect(this.ctx.destination);
     osc2.start(now);
     osc2.stop(now + 0.15);
+
+    // Third harmonic (5th interval) for warmth
+    const osc3 = this.ctx.createOscillator();
+    const gain3 = this.ctx.createGain();
+    osc3.type = 'sine';
+    osc3.frequency.setValueAtTime(baseFreq * 1.5, now);
+    gain3.gain.setValueAtTime(0.06, now);
+    gain3.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+    osc3.connect(gain3);
+    gain3.connect(this.ctx.destination);
+    osc3.start(now);
+    osc3.stop(now + 0.18);
   }
 
   playRingKill() {
