@@ -369,7 +369,7 @@ export class Settings {
   isExitTap(x, y, gameWidth, scale) {
     const ex = gameWidth - 20 * scale;
     const ey = 18 * scale;
-    const hitSize = 35 * scale;
+    const hitSize = 44 * scale;
     return x > ex - hitSize && x < ex + hitSize &&
            y > ey - hitSize && y < ey + hitSize;
   }

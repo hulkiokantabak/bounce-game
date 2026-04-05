@@ -273,9 +273,14 @@ export class SurfaceManager {
       const ballBottom = ball.y + ballRadius;
       const prevBallBottom = ball.prevY + ballRadius;
       const surfaceTop = surface.y - surface.halfThickness;
+      const surfaceBottom = surface.y + surface.halfThickness;
 
-      // Ball crossed surface top from above this frame
-      if (prevBallBottom <= surfaceTop && ballBottom >= surfaceTop) {
+      // Detect collision: ball crossed surface top this frame OR ball is overlapping surface
+      const crossed = prevBallBottom <= surfaceTop && ballBottom >= surfaceTop;
+      const overlapping = ballBottom >= surfaceTop && ballBottom <= surfaceBottom + ballRadius &&
+                          ball.y - ballRadius < surfaceBottom;
+
+      if (crossed || overlapping) {
         // Horizontal overlap (ball circle vs surface rect)
         if (ball.x + ballRadius >= surface.x - surface.halfLength &&
             ball.x - ballRadius <= surface.x + surface.halfLength) {
@@ -300,11 +305,9 @@ export class SurfaceManager {
           let restitution = (ball.getEffectiveRestitution ? ball.getEffectiveRestitution() : ball.ballRestitution) || CONFIG.BALL_RESTITUTION;
 
           if (type === 'spring') {
-            // Cap combined restitution so bouncy ball + spring doesn't go orbital
             restitution = Math.min(CONFIG.SURFACE_SPRING_RESTITUTION, restitution + 0.35);
           } else if (type === 'ice') {
             deflectVx *= CONFIG.SURFACE_ICE_DEFLECT_MULT;
-            // Ice also adds randomness
             deflectVx += (Math.random() - 0.5) * 100 * ball.scale;
           } else if (type === 'sticky') {
             restitution = CONFIG.SURFACE_STICKY_RESTITUTION;
@@ -322,19 +325,19 @@ export class SurfaceManager {
           // Reflect vy with restitution
           ball.vy = -Math.abs(ball.vy) * restitution;
 
-          // Apply spin from offset — stronger spin for more dynamic movement
+          // Apply spin from offset
           if (ball.spin !== undefined) {
             ball.spin += offset * 5;
           }
 
-          // Boost to MIN_SPEED if below
+          // ALWAYS boost to MIN_SPEED — prevents ball from sticking on surface
           const minSpeed = CONFIG.MIN_SPEED * ball.scale;
           if (Math.abs(ball.vy) < minSpeed) {
             ball.vy = -minSpeed;
           }
 
-          // Brief immunity prevents immediate re-collision on nearby surfaces
-          ball.bounceImmunity = 0.05;
+          // Immunity prevents immediate re-collision
+          ball.bounceImmunity = 0.08;
 
           surface.onHit(impactX);
           this.lastHitType = type;
@@ -343,6 +346,22 @@ export class SurfaceManager {
       }
     }
 
+    return false;
+  }
+
+  /** Remove an unhit surface near (x, y). Returns true if one was removed. */
+  tryRemoveAt(x, y) {
+    const threshold = 20; // px proximity to count as "tapping on surface"
+    for (const s of this.surfaces) {
+      if (s.hit || s.removed || s.fading) continue;
+      // Check if tap is within surface bounds (with some vertical tolerance)
+      if (Math.abs(y - s.y) < threshold &&
+          x >= s.x - s.halfLength - threshold &&
+          x <= s.x + s.halfLength + threshold) {
+        s.removed = true;
+        return true;
+      }
+    }
     return false;
   }
 

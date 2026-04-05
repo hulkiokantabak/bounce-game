@@ -189,9 +189,15 @@ class Game {
           break;
         }
         {
+          // Tap near an existing surface? Remove it instead of placing a new one.
+          const removedSurface = this.surfaces.tryRemoveAt(x, y);
+          if (removedSurface) {
+            this.ui.addSurfaceFlash(x, y, '#ff8855');
+            break;
+          }
+
           // Cap surfaces to prevent performance issues
           if (this.surfaces.surfaces.length >= CONFIG.MAX_SURFACES) {
-            // Remove oldest non-hit surface
             const oldest = this.surfaces.surfaces.find(s => !s.hit && !s.removed);
             if (oldest) oldest.removed = true;
           }
@@ -218,12 +224,9 @@ class Game {
           this.ui.addSurfaceFlash(x, y);
           this.ui.addRipple(x, y);
 
-          // Notify AI hook of surface placement
           if (window.BounceAgent) {
             window.BounceAgent._notifySurfacePlaced(x, y);
           }
-
-          // Combo extends surface life silently — no hint needed
         }
         break;
 
