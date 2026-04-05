@@ -5,7 +5,7 @@ export const CONFIG = {
   BALL_RADIUS: 14,
   BALL_RESTITUTION: 0.85,
   WALL_RESTITUTION: 0.9,
-  MIN_SPEED: 100,
+  MIN_SPEED: 200,
   MAX_SPEED: 1200,
   MAX_RUN_DURATION: 120,
 
@@ -210,7 +210,7 @@ export const CONFIG = {
 
   // Phase 4: Ball types — variety from Round 1
   BALL_TYPES: ['standard', 'heavy', 'bouncy', 'small', 'floaty'],
-  BALL_R1_TYPES: ['bouncy', 'floaty'],
+  BALL_R1_TYPES: ['standard', 'bouncy'],
   BALL_R2_TYPES: ['standard', 'bouncy', 'floaty'],
   BALL_R3_PLUS_TYPES: ['standard', 'heavy', 'bouncy', 'small', 'floaty'],
   BALL_MIN_GRAVITY_MULT: 0.4,
@@ -222,7 +222,7 @@ export const CONFIG = {
   BALL_BOUNCY_GRAVITY_MULT: 0.85,
   BALL_SMALL_RADIUS_MULT: 0.7,
   BALL_SMALL_SPEED_MULT: 1.15,
-  BALL_FLOATY_GRAVITY_MULT: 0.5,
+  BALL_FLOATY_GRAVITY_MULT: 0.65,
   BALL_FLOATY_DRIFT: 30,             // random horizontal drift per second
 
   // Phase 4: Environmental effects

@@ -83,12 +83,12 @@ export class Ball {
     this.prevX = this.x;
     this.prevY = this.y;
 
-    // Gravity scaled by speed curve (gentler on round 1) + ball type modifier
+    // Gravity: if ball type already reduces gravity, skip round 1 reduction (don't stack)
     const roundGravMult = this.round <= 1 ? CONFIG.GRAVITY_ROUND1_MULT : 1.0;
     const moodGravMult = this.moodGravityMult !== undefined ? this.moodGravityMult : 1.0;
     const envGrav = this.envGravityMult !== undefined ? this.envGravityMult : 1.0;
-    // Allow zero-G for danger zone extreme (bypass min clamp when envGrav is 0)
-    const rawGravMult = roundGravMult * this.gravityMult * envGrav * moodGravMult;
+    const baseGrav = this.gravityMult < 1.0 ? this.gravityMult : roundGravMult * this.gravityMult;
+    const rawGravMult = baseGrav * envGrav * moodGravMult;
     const totalGravMult = envGrav === 0 ? 0 : Math.max(CONFIG.BALL_MIN_GRAVITY_MULT, rawGravMult);
     this.vy += CONFIG.GRAVITY * this.scale * this.speedMult * totalGravMult * dt;
 
