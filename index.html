@@ -50,30 +50,36 @@
       <div class="settings-divider"></div>
 
       <div class="settings-section">
-        <div class="settings-section-title">Auto-Play</div>
+        <div class="settings-section-title">AI Player</div>
+        <p class="settings-desc">Connect an LLM to play BOUNCE. It sees the game state and places surfaces to thread rings.</p>
         <div class="settings-row">
-          <span class="settings-label">Auto-play bot</span>
-          <button class="settings-toggle" data-setting="aiDemo">OFF</button>
+          <span class="settings-label">Provider</span>
+          <select class="settings-select" id="ai-provider-select"></select>
         </div>
-        <p class="settings-desc">A simple bot that places surfaces automatically. Tap the X to stop. Not actual AI — just a demo of the game engine.</p>
+        <div class="settings-row">
+          <span class="settings-label">Model</span>
+          <select class="settings-select" id="ai-model-select"></select>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">API Key</span>
+          <input type="password" class="settings-name-input" id="ai-api-key" placeholder="paste key..." autocomplete="off" style="width:150px;font-size:12px;">
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Let AI play</span>
+          <button class="settings-toggle" id="ai-play-toggle">OFF</button>
+        </div>
+        <p class="settings-desc" id="ai-status"></p>
       </div>
 
       <div class="settings-divider"></div>
 
       <div class="settings-section">
-        <div class="settings-section-title">Connect Your AI</div>
-        <p class="settings-desc">
-          Build your own AI player! Set <code>window.BOUNCE_AI</code> in the browser console to connect an LLM or bot. It receives game state every frame and can place surfaces, read ball physics, and react to events.
-        </p>
-        <p class="settings-desc" style="margin-top: 6px;">
-          Full API: <code>window.BounceAgent</code> exposes 17+ methods — start runs, place surfaces, read state, control speed.
-        </p>
-        <div class="settings-tryit-list">
-          <button class="settings-tryit" data-action="showState">Show game state</button>
-          <button class="settings-tryit" data-action="startRun">Start a run</button>
-          <button class="settings-tryit" data-action="aiDemo">Auto-play bot demo</button>
+        <div class="settings-section-title">Simple Bot</div>
+        <div class="settings-row">
+          <span class="settings-label">Auto-play bot</span>
+          <button class="settings-toggle" data-setting="aiDemo">OFF</button>
         </div>
-        <div id="tryit-output" class="settings-tryit-output hidden"></div>
+        <p class="settings-desc">A rule-based bot — no AI. Tap X to stop.</p>
       </div>
     </div>
   </div>

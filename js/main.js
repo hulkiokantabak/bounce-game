@@ -13,6 +13,7 @@ import { AIHooks } from './ai-hooks.js';
 import { AgentAPI } from './agent.js';
 import { LifetimeStats } from './lifetime.js';
 import { Settings } from './settings.js';
+import { AIPlayer } from './ai-player.js';
 
 const State = {
   MENU: 'MENU',
@@ -41,6 +42,8 @@ class Game {
     this.aiHooks = new AIHooks();
     this.lifetime = new LifetimeStats();
     this.settings = new Settings();
+    this.aiPlayer = new AIPlayer();
+    this.settings.initAIPlayer(this.aiPlayer);
     this.runBounceTotal = 0;
 
     // AI demo state
@@ -167,11 +170,12 @@ class Game {
           this._playAudio('stopGravityHum');
           this._gravityHumActive = false;
           this.gravityPulse = false;
-          // Disable AI demo so it doesn't auto-restart
+          // Disable AI demo and AI player so they don't auto-restart
           if (this.settings.aiDemoEnabled) {
             this.settings.values.aiDemo = false;
             this.settings._save();
           }
+          if (this.aiPlayer.enabled) this.aiPlayer.stop();
           this.state = State.MENU;
           this.ball = null;
           this.surfaces.clear();
@@ -179,7 +183,12 @@ class Game {
           this.fetchConstellations();
           break;
         }
-        if (!this.isInDeadZone(y)) {
+        if (this.isInDeadZone(y)) {
+          // Dead zone rejection — subtle flash so player knows why nothing happened
+          this.ui.addSurfaceFlash(x, y, '#ff5050');
+          break;
+        }
+        {
           // Cap surfaces to prevent performance issues
           if (this.surfaces.surfaces.length >= CONFIG.MAX_SURFACES) {
             // Remove oldest non-hit surface
@@ -827,7 +836,12 @@ class Game {
     switch (this.state) {
       case State.MENU:
         this.ui.updateMenu(dt);
-        // AI demo auto-start from menu
+        // AI Player or AI demo auto-start from menu
+        if (this.aiPlayer.enabled && !this.settings.isOpen) {
+          this.audio.init();
+          this.startNewRun();
+          break;
+        }
         if (this.settings.aiDemoEnabled && !this.settings.isOpen) {
           this.audio.init();
           this.startNewRun();
@@ -884,6 +898,15 @@ class Game {
 
         // Danger zone chaos — escalating interventions when ball is low
         this.updateDangerZone(dt);
+
+        // AI Player — Claude API integration
+        if (this.aiPlayer.enabled && this.ball && this.ball.alive) {
+          this.aiPlayer.update(this.gameTime, window.BounceAgent).then(result => {
+            if (result && this.state === State.DROPPING) {
+              this.handleTap(result.x, result.y);
+            }
+          });
+        }
 
         // AI demo auto-play — place surfaces automatically
         if (this.settings.aiDemoEnabled && this.ball && this.ball.alive) {
@@ -1397,6 +1420,24 @@ class Game {
             ctx.restore();
           }
         }
+      }
+
+      // AI Player indicator
+      if (this.aiPlayer.enabled) {
+        const aiPulse = 0.3 + 0.15 * Math.sin(this.gameTime * 3);
+        ctx.save();
+        ctx.globalAlpha = aiPulse;
+        ctx.fillStyle = '#88ffcc';
+        ctx.font = `${Math.round(10 * scale)}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(this.aiPlayer.thinking ? 'AI thinking...' : 'AI PLAYING · tap X to stop', gameWidth / 2, gameHeight - 8 * scale);
+        if (this.aiPlayer.error) {
+          ctx.globalAlpha = 0.5;
+          ctx.fillStyle = '#ff6666';
+          ctx.fillText(this.aiPlayer.error, gameWidth / 2, gameHeight - 22 * scale);
+        }
+        ctx.restore();
       }
 
       // AI demo indicator

@@ -258,8 +258,12 @@ export class AgentAPI {
     if (!ball || !ball.alive) return null;
 
     const scale = ball.scale;
-    const gravMult = ball.round <= 1 ? CONFIG.GRAVITY_ROUND1_MULT : 1.0;
-    const gravity = CONFIG.GRAVITY * scale * ball.speedMult * gravMult;
+    const roundGravMult = ball.round <= 1 ? CONFIG.GRAVITY_ROUND1_MULT : 1.0;
+    const ballGravMult = ball.gravityMult || 1.0;
+    const baseGrav = ballGravMult < 1.0 ? ballGravMult : roundGravMult * ballGravMult;
+    const envGrav = ball.envGravityMult !== undefined ? ball.envGravityMult : 1.0;
+    const totalGrav = envGrav === 0 ? 0 : Math.max(CONFIG.BALL_MIN_GRAVITY_MULT, baseGrav * envGrav);
+    const gravity = CONFIG.GRAVITY * scale * ball.speedMult * totalGrav;
 
     let vx = ball.vx;
     let vy = ball.vy + gravity * dt;
@@ -283,8 +287,12 @@ export class AgentAPI {
     if (!ball || !ball.alive) return [];
 
     const scale = ball.scale;
-    const gravMult = ball.round <= 1 ? CONFIG.GRAVITY_ROUND1_MULT : 1.0;
-    const gravity = CONFIG.GRAVITY * scale * ball.speedMult * gravMult;
+    const roundGravMult = ball.round <= 1 ? CONFIG.GRAVITY_ROUND1_MULT : 1.0;
+    const ballGravMult = ball.gravityMult || 1.0;
+    const baseGrav = ballGravMult < 1.0 ? ballGravMult : roundGravMult * ballGravMult;
+    const envGrav = ball.envGravityMult !== undefined ? ball.envGravityMult : 1.0;
+    const totalGrav = envGrav === 0 ? 0 : Math.max(CONFIG.BALL_MIN_GRAVITY_MULT, baseGrav * envGrav);
+    const gravity = CONFIG.GRAVITY * scale * ball.speedMult * totalGrav;
     const gw = this._game.renderer.gameWidth;
     const gh = this._game.renderer.gameHeight;
 

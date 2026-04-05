@@ -360,6 +360,27 @@ canvas {
   border-color: rgba(255, 204, 102, 0.5);
 }
 
+.settings-select {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  color: #fff;
+  font-family: monospace;
+  font-size: 13px;
+  padding: 5px 8px;
+  outline: none;
+  cursor: pointer;
+}
+
+.settings-select:focus {
+  border-color: rgba(255, 204, 102, 0.5);
+}
+
+.settings-select option {
+  background: #1a1a24;
+  color: #fff;
+}
+
 .settings-tryit-list {
   display: flex;
   flex-direction: column;

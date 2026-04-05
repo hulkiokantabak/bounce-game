@@ -261,6 +261,7 @@ export class SurfaceManager {
   }
 
   checkCollision(ball) {
+    if (ball.bounceImmunity > 0) return false;
     const ballRadius = ball.radius;
 
     for (const surface of this.surfaces) {
@@ -331,6 +332,9 @@ export class SurfaceManager {
           if (Math.abs(ball.vy) < minSpeed) {
             ball.vy = -minSpeed;
           }
+
+          // Brief immunity prevents immediate re-collision on nearby surfaces
+          ball.bounceImmunity = 0.05;
 
           surface.onHit(impactX);
           this.lastHitType = type;

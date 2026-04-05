@@ -107,6 +107,111 @@ export class Settings {
     }
   }
 
+  initAIPlayer(aiPlayer) {
+    if (!this.overlay) return;
+    this._aiPlayer = aiPlayer;
+
+    const providerSelect = this.overlay.querySelector('#ai-provider-select');
+    const modelSelect = this.overlay.querySelector('#ai-model-select');
+    const apiKeyInput = this.overlay.querySelector('#ai-api-key');
+    const playToggle = this.overlay.querySelector('#ai-play-toggle');
+    const statusEl = this.overlay.querySelector('#ai-status');
+
+    if (!providerSelect || !modelSelect || !apiKeyInput || !playToggle) return;
+
+    // Dynamically import provider list
+    const providers = aiPlayer.constructor.getProviders();
+
+    // Populate provider dropdown
+    for (const p of providers) {
+      const opt = document.createElement('option');
+      opt.value = p.key;
+      opt.textContent = p.label;
+      providerSelect.appendChild(opt);
+    }
+    providerSelect.value = aiPlayer.provider;
+
+    // Populate model dropdown for current provider
+    const populateModels = () => {
+      modelSelect.innerHTML = '';
+      const prov = providers.find(p => p.key === aiPlayer.provider);
+      if (prov) {
+        for (const m of prov.models) {
+          const opt = document.createElement('option');
+          opt.value = m.id;
+          opt.textContent = m.label;
+          modelSelect.appendChild(opt);
+        }
+      }
+      modelSelect.value = aiPlayer.modelId;
+    };
+    populateModels();
+
+    // Load stored key into input
+    if (aiPlayer.apiKey) apiKeyInput.value = aiPlayer.apiKey;
+
+    // Provider change
+    providerSelect.addEventListener('change', () => {
+      aiPlayer.setProvider(providerSelect.value);
+      populateModels();
+    });
+
+    // Model change
+    modelSelect.addEventListener('change', () => {
+      aiPlayer.setModel(modelSelect.value);
+    });
+
+    // API key save
+    const saveKey = () => {
+      aiPlayer.setApiKey(apiKeyInput.value);
+      this._updateAIStatus(statusEl);
+    };
+    apiKeyInput.addEventListener('blur', saveKey);
+    apiKeyInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { saveKey(); apiKeyInput.blur(); }
+    });
+
+    // Play toggle
+    const updateToggle = () => {
+      playToggle.textContent = aiPlayer.enabled ? 'ON' : 'OFF';
+      playToggle.classList.toggle('active', aiPlayer.enabled);
+    };
+    updateToggle();
+
+    playToggle.addEventListener('click', () => {
+      if (aiPlayer.enabled) {
+        aiPlayer.stop();
+      } else {
+        if (!aiPlayer.isConfigured) {
+          if (statusEl) statusEl.textContent = 'Enter an API key first.';
+          return;
+        }
+        aiPlayer.start();
+        this.hide();
+      }
+      updateToggle();
+      this._updateAIStatus(statusEl);
+    });
+
+    this._aiStatusEl = statusEl;
+    this._aiPlayToggle = playToggle;
+    this._aiUpdateToggle = updateToggle;
+  }
+
+  _updateAIStatus(el) {
+    if (!el || !this._aiPlayer) return;
+    const ai = this._aiPlayer;
+    if (ai.error) {
+      el.textContent = ai.error;
+    } else if (ai.enabled) {
+      el.textContent = 'AI is playing. Tap X to stop.';
+    } else if (ai.isConfigured) {
+      el.textContent = 'Key saved. Toggle ON to let AI play.';
+    } else {
+      el.textContent = '';
+    }
+  }
+
   _handleTryIt(action, outputEl) {
     const agent = window.BounceAgent;
     if (!agent) {
@@ -168,6 +273,12 @@ export class Settings {
     // Hide try-it output
     const outputEl = this.overlay.querySelector('#tryit-output');
     if (outputEl) outputEl.classList.add('hidden');
+
+    // Refresh AI player status
+    if (this._aiPlayer && this._aiUpdateToggle) {
+      this._aiUpdateToggle();
+      this._updateAIStatus(this._aiStatusEl);
+    }
 
     this.overlay.classList.remove('hidden');
     this.isOpen = true;

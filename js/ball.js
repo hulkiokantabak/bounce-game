@@ -60,6 +60,7 @@ export class Ball {
     this.opacity = 0; // Fade in
     this.fadeInTimer = 0;
     this.envGravityMult = 1.0;
+    this.bounceImmunity = 0; // brief immunity after bounce prevents re-collision
 
     // Trail
     this.trail = [];
@@ -131,6 +132,11 @@ export class Ball {
     // Position
     this.x += this.vx * dt;
     this.y += this.vy * dt;
+
+    // Bounce immunity decay
+    if (this.bounceImmunity > 0) {
+      this.bounceImmunity = Math.max(0, this.bounceImmunity - dt);
+    }
 
     // Fade-in
     if (this.fadeInTimer < 0.2) {
