@@ -156,6 +156,12 @@ class Game {
           this._playAudio('playPlace', y / this.renderer.gameHeight);
           this._vibrate(CONFIG.PLACE_VIBRATE);
           this.ui.addSurfaceFlash(x, y);
+          this.ui.addRipple(x, y);
+
+          // Notify AI hook of surface placement
+          if (window.BounceAgent) {
+            window.BounceAgent._notifySurfacePlaced(x, y);
+          }
 
           // Show combo indicator for rapid placement
           if (this.placeCombo >= 2) {
@@ -694,6 +700,9 @@ class Game {
           const bounceFlashColor = flashColors[this.surfaces.lastHitType] || '#ffffff';
           this.ui.addSurfaceFlash(this.ball.x, this.ball.y, bounceFlashColor);
 
+          // Directional bounce particles
+          this.ui.addBounceParticles(this.ball.x, this.ball.y, this.ball.vx, this.ball.vy, this.renderer.scale);
+
           // First-bounce encouragement on R1
           if (isFirstBounce) {
             this.ui.showHint('nice!', this.ball.x, this.ball.y - this.ball.radius - 20 * this.renderer.scale);
@@ -842,6 +851,9 @@ class Game {
     this.renderer.clear(this.scoreManager.round);
     this.renderer.drawVignette(this.scoreManager.round);
 
+    // Background star field — subtle twinkling dots
+    this.ui.renderStars(ctx, gameWidth, gameHeight, scale, this.gameTime);
+
     if (this.state === State.MENU || this.state === State.LEADERBOARD) {
       // Render ghost trail from last run
       if (this.lastTrail && this.lastTrail.length > 1) {
@@ -983,20 +995,39 @@ class Game {
       }
     }
 
+    // Ripples and bounce particles
+    if (!inTrailHold) {
+      this.ui.renderRipples(ctx, scale);
+      this.ui.renderBounceParticles(ctx, scale);
+    }
+
     if (this.state === State.DROPPING || this.state === State.RING_HIT) {
-      // Landing predictor — subtle dot showing where ball is heading
+      // Trajectory preview — dotted arc showing predicted path
       if (this.ball && this.ball.alive && this.ball.vy > 0) {
-        const predX = this.ball.x + this.ball.vx * 0.3;
-        const predY = this.ball.y + this.ball.vy * 0.3 + CONFIG.GRAVITY * this.ball.scale * 0.045;
-        if (predY < gameHeight && predY > 0) {
-          ctx.save();
-          ctx.globalAlpha = 0.08;
-          ctx.fillStyle = CONFIG.BALL_COLOR;
+        const gravMult = this.ball.round <= 1 ? CONFIG.GRAVITY_ROUND1_MULT : 1.0;
+        const gravity = CONFIG.GRAVITY * this.ball.scale * this.ball.speedMult * gravMult * (this.ball.gravityMult || 1.0);
+        let px = this.ball.x, py = this.ball.y;
+        let pvx = this.ball.vx, pvy = this.ball.vy;
+        const stepDt = CONFIG.TRAJECTORY_PREVIEW_STEP_DT;
+
+        ctx.save();
+        ctx.fillStyle = CONFIG.BALL_COLOR;
+        for (let i = 0; i < CONFIG.TRAJECTORY_PREVIEW_STEPS; i++) {
+          pvy += gravity * stepDt;
+          px += pvx * stepDt;
+          py += pvy * stepDt;
+          // Wall bounce
+          if (px < this.ball.radius) { px = this.ball.radius; pvx = Math.abs(pvx) * CONFIG.WALL_RESTITUTION; }
+          if (px > gameWidth - this.ball.radius) { px = gameWidth - this.ball.radius; pvx = -Math.abs(pvx) * CONFIG.WALL_RESTITUTION; }
+          if (py > gameHeight || py < 0) break;
+
+          const fade = 1 - i / CONFIG.TRAJECTORY_PREVIEW_STEPS;
+          ctx.globalAlpha = CONFIG.TRAJECTORY_PREVIEW_OPACITY * fade;
           ctx.beginPath();
-          ctx.arc(predX, predY, 3 * scale, 0, Math.PI * 2);
+          ctx.arc(px, py, 1.5 * scale, 0, Math.PI * 2);
           ctx.fill();
-          ctx.restore();
         }
+        ctx.restore();
       }
 
       this.ui.renderScore(ctx, gameWidth, gameHeight, scale, this.scoreManager);
@@ -1058,23 +1089,38 @@ class Game {
         ctx.fillText('low-g', gameWidth - 12 * scale, 32 * scale);
         ctx.restore();
       }
-      // Hint text on round 1
-      if (this.scoreManager.round === 1 && this.ringManager.rings.length > 0) {
+      // Progressive hint system — fades out after R3
+      if (this.scoreManager.round <= 3 && this.ringManager.rings.length > 0) {
         const ring = this.ringManager.rings[0];
         if (ring.active) {
-          ctx.save();
-          ctx.globalAlpha = 0.2;
-          ctx.fillStyle = '#ffffff';
-          ctx.font = `${Math.round(12 * scale)}px monospace`;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'bottom';
-          ctx.fillText('thread the ring', ring.cx, ring.cy - ring.radius - 10 * scale);
-          ctx.restore();
+          let hintText = '';
+          let hintAlpha = 0.2;
+          if (this.scoreManager.round === 1) {
+            hintText = this.gameTime < CONFIG.TUTORIAL_HINT_R1_DELAY ? 'tap to place surfaces' : 'thread the ring';
+            hintAlpha = 0.2;
+          } else if (this.scoreManager.round === 2) {
+            hintText = 'aim for the gap';
+            hintAlpha = 0.15;
+          } else {
+            hintText = 'fewer bounces = more points';
+            hintAlpha = 0.1;
+          }
+          if (hintText) {
+            ctx.save();
+            ctx.globalAlpha = hintAlpha;
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `${Math.round(12 * scale)}px monospace`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(hintText, ring.cx, ring.cy - ring.radius - 10 * scale);
+            ctx.restore();
+          }
         }
       }
     }
 
     if (isRunOver) {
+      this.ui._runEndBounces = this.runBounceTotal;
       this.ui.renderRunEnd(ctx, gameWidth, gameHeight, scale, this.scoreManager, this.runEndTimer, this.lifetime);
     }
 

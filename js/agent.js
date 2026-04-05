@@ -482,4 +482,71 @@ export class AgentAPI {
   get speedMultiplier() {
     return this._speedMultiplier || 1;
   }
+
+  // --- Enhanced AI Methods ---
+
+  /** Get a compact game summary for LLM-friendly consumption */
+  getSummary() {
+    const g = this._game;
+    const ball = g.ball;
+    const rings = g.ringManager.rings.filter(r => r.active && r.gapRevealed);
+    const ring = rings[0];
+    const gw = g.renderer.gameWidth;
+    const gh = g.renderer.gameHeight;
+
+    return {
+      playing: g.state === 'DROPPING',
+      round: g.scoreManager.round,
+      score: g.scoreManager.score,
+      streak: g.scoreManager.streak,
+      ball: ball && ball.alive ? {
+        x: Math.round(ball.x),
+        y: Math.round(ball.y),
+        vx: Math.round(ball.vx),
+        vy: Math.round(ball.vy),
+        type: ball.ballType,
+        falling: ball.vy > 0,
+      } : null,
+      ring: ring ? {
+        x: Math.round(ring.cx),
+        y: Math.round(ring.cy),
+        gapDeg: Math.round(ring.gapCenter * 180 / Math.PI),
+        event: ring.event,
+      } : null,
+      surfaces: g.surfaces.surfaces.filter(s => !s.removed && !s.hit).length,
+      screen: { w: gw, h: gh },
+    };
+  }
+
+  /** Tutorial mode — auto-places a surface under the ball to guide it toward the ring */
+  autoPlace() {
+    const g = this._game;
+    if (g.state !== 'DROPPING') return false;
+    const ball = g.ball;
+    if (!ball || !ball.alive || ball.vy <= 0) return false;
+
+    const rings = g.ringManager.rings.filter(r => r.active && r.gapRevealed);
+    if (rings.length === 0) return false;
+    const ring = rings[0];
+
+    // Predict where ball will be in ~0.3s
+    const predY = ball.y + ball.vy * 0.25 + CONFIG.GRAVITY * ball.scale * 0.03;
+    const predX = ball.x + ball.vx * 0.25;
+
+    // Calculate offset to nudge ball toward ring
+    const dx = ring.cx - predX;
+    const nudge = Math.sign(dx) * Math.min(Math.abs(dx) * 0.3, 30);
+
+    const placeX = Math.max(20, Math.min(g.renderer.gameWidth - 20, predX + nudge));
+    const placeY = Math.max(g.renderer.gameHeight * 0.15, Math.min(g.renderer.gameHeight * 0.9, predY + 40));
+
+    return this.placeSurface(placeX, placeY);
+  }
+
+  /** Notify AI hook when player places a surface */
+  _notifySurfacePlaced(x, y) {
+    if (this._game.aiHooks && this._game.aiHooks.isConnected) {
+      this._game.aiHooks._call('onSurfacePlaced', { x, y, time: this._game.gameTime });
+    }
+  }
 }

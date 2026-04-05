@@ -10,6 +10,7 @@
  *     onRingResult(result)  — called after ring thread success or failure
  *     onBounce(data)        — called when ball bounces off a surface
  *     onRunEnd(stats)       — called when a run ends
+ *     onSurfacePlaced(data) — called when player places a surface ({x, y, time})
  *     getSurfaceHint(state) — return {x, y} or Promise<{x, y}> to suggest surface placement
  *     getCommentary(event)  — return string or Promise<string> for in-game commentary
  *   }

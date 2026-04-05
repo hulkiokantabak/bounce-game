@@ -250,6 +250,36 @@ export const CONFIG = {
   RING_GRAVITY_WELL_STRENGTH: 25,     // attraction force when ball near ring
   RING_GRAVITY_WELL_RADIUS: 1.8,      // in ring radii
   MAX_PHYSICS_CATCHUP: 10,            // max physics ticks per frame to prevent spiral of death
+
+  // Phase 6: Trajectory preview
+  TRAJECTORY_PREVIEW_STEPS: 20,        // dotted arc steps
+  TRAJECTORY_PREVIEW_STEP_DT: 0.025,   // time per step
+  TRAJECTORY_PREVIEW_OPACITY: 0.06,    // very subtle
+
+  // Phase 6: Ring gap glow pulse
+  RING_GAP_GLOW_RADIUS: 8,            // glow around gap edges
+  RING_GAP_GLOW_OPACITY: 0.2,
+
+  // Phase 6: Surface placement ripple
+  SURFACE_RIPPLE_DURATION: 0.3,
+  SURFACE_RIPPLE_MAX_RADIUS: 40,
+
+  // Phase 6: Directional bounce particles
+  BOUNCE_PARTICLE_COUNT: 4,
+  BOUNCE_PARTICLE_SPEED: 80,
+  BOUNCE_PARTICLE_LIFE: 0.3,
+
+  // Phase 6: Background stars
+  STAR_COUNT: 30,
+  STAR_MAX_SIZE: 1.5,
+  STAR_MIN_OPACITY: 0.02,
+  STAR_MAX_OPACITY: 0.06,
+
+  // Phase 6: Score breakdown
+  SCORE_BREAKDOWN_SHOW_BOUNCES: true,
+
+  // Phase 6: First-run tutorial
+  TUTORIAL_HINT_R1_DELAY: 1.0,        // seconds before showing R1 hint
 };
 
 export function hexToRgba(hex, alpha) {

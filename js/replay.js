@@ -92,6 +92,14 @@ export class ReplayPlayer {
   }
 
   load(trailData, duration, gameWidth, gameHeight) {
+    // Validate and sanitize replay data from server
+    if (!trailData || typeof trailData !== 'object') trailData = {};
+    if (!Array.isArray(trailData.ball)) trailData.ball = [];
+    if (!Array.isArray(trailData.surfaces)) trailData.surfaces = [];
+    if (!Array.isArray(trailData.rings)) trailData.rings = [];
+    trailData.ball = trailData.ball.slice(0, 5000);
+    trailData.surfaces = trailData.surfaces.slice(0, 500);
+    trailData.rings = trailData.rings.slice(0, 100);
     this.data = trailData;
     this.duration = duration;
     this.gameWidth = gameWidth;

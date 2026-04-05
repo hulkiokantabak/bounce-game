@@ -31,6 +31,29 @@ export class UI {
 
     // Clean flash
     this.cleanFlash = null;
+
+    // Surface placement ripples
+    this.ripples = [];
+
+    // Bounce directional particles
+    this.bounceParticles = [];
+
+    // Background star field
+    this.stars = [];
+    this._initStars();
+  }
+
+  _initStars() {
+    for (let i = 0; i < CONFIG.STAR_COUNT; i++) {
+      this.stars.push({
+        x: Math.random(),
+        y: Math.random(),
+        size: 0.5 + Math.random() * CONFIG.STAR_MAX_SIZE,
+        alpha: CONFIG.STAR_MIN_OPACITY + Math.random() * (CONFIG.STAR_MAX_OPACITY - CONFIG.STAR_MIN_OPACITY),
+        twinkleSpeed: 0.5 + Math.random() * 2,
+        twinklePhase: Math.random() * Math.PI * 2,
+      });
+    }
   }
 
   updateMenu(dt) {
@@ -104,6 +127,18 @@ export class UI {
     // Hints
     for (const h of this.hints) h.timer += dt;
     this.hints = this.hints.filter(h => h.timer < 2.0);
+
+    // Ripples
+    for (const r of this.ripples) r.timer += dt;
+    this.ripples = this.ripples.filter(r => r.timer < CONFIG.SURFACE_RIPPLE_DURATION);
+
+    // Bounce particles
+    for (const bp of this.bounceParticles) {
+      bp.x += bp.vx * dt;
+      bp.y += bp.vy * dt;
+      bp.life -= dt;
+    }
+    this.bounceParticles = this.bounceParticles.filter(bp => bp.life > 0);
 
     // Transition dip
     if (this.transitionDip > 0) {
@@ -203,6 +238,28 @@ export class UI {
 
   showHint(text, x, y) {
     this.hints.push({ text, x, y, timer: 0 });
+  }
+
+  addRipple(x, y) {
+    this.ripples.push({ x, y, timer: 0 });
+  }
+
+  addBounceParticles(x, y, vx, vy, scale) {
+    // Directional spray — particles go opposite to ball velocity
+    const baseAngle = Math.atan2(-vy, -vx);
+    const count = CONFIG.BOUNCE_PARTICLE_COUNT;
+    for (let i = 0; i < count; i++) {
+      const spread = (Math.random() - 0.5) * Math.PI * 0.6;
+      const angle = baseAngle + spread;
+      const speed = CONFIG.BOUNCE_PARTICLE_SPEED * scale * (0.5 + Math.random() * 0.5);
+      this.bounceParticles.push({
+        x, y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life: CONFIG.BOUNCE_PARTICLE_LIFE,
+        maxLife: CONFIG.BOUNCE_PARTICLE_LIFE,
+      });
+    }
   }
 
   triggerTransitionDip() {
@@ -616,6 +673,51 @@ export class UI {
     ctx.restore();
   }
 
+  renderRipples(ctx, scale) {
+    for (const r of this.ripples) {
+      const progress = r.timer / CONFIG.SURFACE_RIPPLE_DURATION;
+      const alpha = 0.15 * (1 - progress);
+      const radius = CONFIG.SURFACE_RIPPLE_MAX_RADIUS * scale * progress;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  renderBounceParticles(ctx, scale) {
+    if (this.bounceParticles.length === 0) return;
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    for (const bp of this.bounceParticles) {
+      const lifeRatio = bp.life / bp.maxLife;
+      ctx.globalAlpha = lifeRatio * 0.4;
+      const radius = 1.5 * scale * lifeRatio;
+      ctx.beginPath();
+      ctx.arc(bp.x, bp.y, radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  renderStars(ctx, gameWidth, gameHeight, scale, gameTime) {
+    ctx.save();
+    for (const star of this.stars) {
+      const twinkle = 0.5 + 0.5 * Math.sin(gameTime * star.twinkleSpeed + star.twinklePhase);
+      ctx.globalAlpha = star.alpha * twinkle;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(star.x * gameWidth, star.y * gameHeight, star.size * scale, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   renderRunEnd(ctx, gameWidth, gameHeight, scale, scoreManager, timer, lifetime) {
     const p1End = CONFIG.RUN_END_PAUSE;
     const p2End = p1End + CONFIG.RUN_END_TRAIL_HOLD;
@@ -646,17 +748,25 @@ export class UI {
         ctx.fillText(`${scoreManager.longestStreak} streak`, gameWidth / 2, gameHeight * 0.35 + 65 * scale);
       }
 
+      // Bounce count (score breakdown) — passed via extra param
+      if (CONFIG.SCORE_BREAKDOWN_SHOW_BOUNCES && this._runEndBounces > 0) {
+        ctx.globalAlpha = fadeProgress * 0.3;
+        ctx.font = `${Math.round(12 * scale)}px monospace`;
+        ctx.fillText(`${this._runEndBounces} bounces`, gameWidth / 2, gameHeight * 0.35 + 85 * scale);
+      }
+
       // Personal best line
+      const extraY = (CONFIG.SCORE_BREAKDOWN_SHOW_BOUNCES && this._runEndBounces > 0) ? 20 * scale : 0;
       if (scoreManager.isNewPersonalBest) {
         ctx.globalAlpha = fadeProgress * 0.7;
         ctx.fillStyle = CONFIG.RING_COLOR;
         ctx.font = `bold ${Math.round(14 * scale)}px monospace`;
-        ctx.fillText('NEW BEST!', gameWidth / 2, gameHeight * 0.35 + 90 * scale);
+        ctx.fillText('NEW BEST!', gameWidth / 2, gameHeight * 0.35 + 90 * scale + extraY);
       } else if (scoreManager.personalBest > 0) {
         ctx.globalAlpha = fadeProgress * 0.25;
         ctx.fillStyle = '#ffffff';
         ctx.font = `${Math.round(13 * scale)}px monospace`;
-        ctx.fillText(`best: ${scoreManager.personalBest.toLocaleString()}`, gameWidth / 2, gameHeight * 0.35 + 90 * scale);
+        ctx.fillText(`best: ${scoreManager.personalBest.toLocaleString()}`, gameWidth / 2, gameHeight * 0.35 + 90 * scale + extraY);
       }
 
       // Forward hook — give player a reason to retry
@@ -666,7 +776,7 @@ export class UI {
         ctx.globalAlpha = fadeProgress * 0.2;
         ctx.fillStyle = '#ffffff';
         ctx.font = `${Math.round(11 * scale)}px monospace`;
-        ctx.fillText(`${diff} round${diff > 1 ? 's' : ''} from your best`, gameWidth / 2, gameHeight * 0.35 + 110 * scale);
+        ctx.fillText(`${diff} round${diff > 1 ? 's' : ''} from your best`, gameWidth / 2, gameHeight * 0.35 + 110 * scale + extraY);
       }
 
       // Context-sensitive lifetime stat
@@ -681,7 +791,7 @@ export class UI {
         ctx.globalAlpha = fadeProgress * 0.15;
         ctx.fillStyle = '#ffffff';
         ctx.font = `${Math.round(11 * scale)}px monospace`;
-        ctx.fillText(lifetimeLine, gameWidth / 2, gameHeight * 0.35 + 130 * scale);
+        ctx.fillText(lifetimeLine, gameWidth / 2, gameHeight * 0.35 + 130 * scale + extraY);
       }
 
       ctx.restore();

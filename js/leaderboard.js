@@ -425,6 +425,7 @@ export class Leaderboard {
 
   async fetchReplayData(entryId) {
     if (!this.isConfigured) return null;
+    if (typeof entryId !== 'string' || !/^[a-f0-9-]{36}$/i.test(entryId)) return null;
     try {
       const url = new URL(`${CONFIG.SUPABASE_URL}/rest/v1/bounce_runs`);
       url.searchParams.set('select', '*');

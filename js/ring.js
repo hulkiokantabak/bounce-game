@@ -245,6 +245,28 @@ class Ring {
         ctx.arc(ex, ey, dotR, 0, Math.PI * 2);
         ctx.fill();
       }
+
+      // Gap edge glow pulse — breathing halo around gap dots
+      const glowPulse = 0.5 + 0.5 * Math.sin(this.pulseTime * 2.5);
+      const glowR = CONFIG.RING_GAP_GLOW_RADIUS * this.scale;
+      const glowAlpha = CONFIG.RING_GAP_GLOW_OPACITY * glowPulse;
+      if (glowAlpha > 0.01) {
+        const gsx = this.cx + Math.cos(gapStart) * this.radius;
+        const gsy = this.cy + Math.sin(gapStart) * this.radius;
+        const gex = this.cx + Math.cos(gapEnd) * this.radius;
+        const gey = this.cy + Math.sin(gapEnd) * this.radius;
+
+        for (const [gx, gy] of [[gsx, gsy], [gex, gey]]) {
+          const grad = ctx.createRadialGradient(gx, gy, 0, gx, gy, glowR);
+          grad.addColorStop(0, `rgba(255, 204, 102, ${glowAlpha})`);
+          grad.addColorStop(1, 'rgba(255, 204, 102, 0)');
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(gx, gy, glowR, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
     } else {
       // Ring B before A threaded: full ring, dimmer
       ctx.globalAlpha = brightness * 0.4;
