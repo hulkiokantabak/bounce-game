@@ -25,6 +25,12 @@ export class UI {
 
     // Round transition sweep
     this.roundSweep = null;
+
+    // Round badge
+    this.roundBadge = null;
+
+    // Clean flash
+    this.cleanFlash = null;
   }
 
   updateMenu(dt) {
@@ -120,6 +126,22 @@ export class UI {
       }
     }
 
+    // Clean flash
+    if (this.cleanFlash) {
+      this.cleanFlash.timer += dt;
+      if (this.cleanFlash.timer >= 0.3) {
+        this.cleanFlash = null;
+      }
+    }
+
+    // Round badge
+    if (this.roundBadge) {
+      this.roundBadge.timer += dt;
+      if (this.roundBadge.timer >= CONFIG.ROUND_BADGE_DURATION) {
+        this.roundBadge = null;
+      }
+    }
+
     // Menu stat rotation
     this.menuStatTimer += dt;
     const interval = CONFIG.MENU_STAT_ROTATE_INTERVAL;
@@ -142,7 +164,9 @@ export class UI {
     let text = `+${score.toLocaleString()}`;
     if (mult > 0) text += ` (${mult}\u00d7)`;
     if (isClean) text = `CLEAN! ${text}`;
-    this.scorePops.push({ x, y, text, timer: 0, isStreak, isClean });
+    // Offset stacking: shift up by number of active pops to prevent overlap
+    const stackOffset = this.scorePops.length * 18;
+    this.scorePops.push({ x, y: y - stackOffset, text, timer: 0, isStreak, isClean });
   }
 
   addSurfaceFlash(x, y) {
@@ -173,8 +197,8 @@ export class UI {
     this.wallImpacts.push({ x, y, timer: 0 });
   }
 
-  addDeathSplash(x, y) {
-    this.deathSplashes.push({ x, y, timer: 0 });
+  addDeathSplash(x, y, color) {
+    this.deathSplashes.push({ x, y, timer: 0, color: color || '#ffffff' });
   }
 
   showHint(text, x, y) {
@@ -191,6 +215,14 @@ export class UI {
 
   triggerPBFlash() {
     this.pbFlashTimer = 1.0;
+  }
+
+  triggerCleanFlash() {
+    this.cleanFlash = { timer: 0 };
+  }
+
+  triggerRoundBadge(round) {
+    this.roundBadge = { round, timer: 0 };
   }
 
   triggerStreakFlash(streak) {
@@ -218,15 +250,17 @@ export class UI {
     ctx.fillText('BOUNCE', gameWidth / 2, gameHeight / 2);
     ctx.restore();
 
-    // "tap to play" prompt
+    // "tap to play" prompt — varies for returning players
     const tapPulse = 0.15 + 0.15 * Math.sin(this.menuPulseTime * 2);
+    const runs = lifetime ? lifetime.stats.totalRuns : 0;
+    const tapText = runs === 0 ? 'tap to play' : runs < 5 ? 'try again' : 'one more';
     ctx.save();
     ctx.globalAlpha = tapPulse;
     ctx.fillStyle = '#ffffff';
     ctx.font = `${Math.round(14 * scale)}px monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('tap to play', gameWidth / 2, gameHeight / 2 + 35 * scale);
+    ctx.fillText(tapText, gameWidth / 2, gameHeight / 2 + 35 * scale);
     ctx.restore();
 
     // Personal best below prompt
@@ -448,7 +482,7 @@ export class UI {
 
       ctx.save();
       ctx.globalAlpha = alpha;
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = d.color || '#ffffff';
       ctx.beginPath();
       ctx.ellipse(d.x, d.y, width / 2, height / 2, 0, 0, Math.PI * 2);
       ctx.fill();
@@ -460,7 +494,7 @@ export class UI {
     for (const h of this.hints) {
       const fadeIn = Math.min(h.timer / 0.3, 1);
       const fadeOut = h.timer > 1.5 ? 1 - (h.timer - 1.5) / 0.5 : 1;
-      const alpha = 0.2 * fadeIn * fadeOut;
+      const alpha = 0.25 * fadeIn * fadeOut;
       if (alpha <= 0) continue;
 
       ctx.save();
@@ -499,6 +533,51 @@ export class UI {
     ctx.restore();
   }
 
+  renderCleanFlash(ctx, gameWidth, gameHeight) {
+    if (!this.cleanFlash) return;
+    const progress = this.cleanFlash.timer / 0.3;
+    // Golden radial pulse from center — distinct from regular ring flash
+    const alpha = 0.2 * (1 - progress);
+    const cx = gameWidth / 2;
+    const cy = gameHeight / 2;
+    const radius = Math.max(gameWidth, gameHeight) * (0.2 + 0.8 * progress);
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    grad.addColorStop(0, `rgba(255, 204, 102, ${alpha})`);
+    grad.addColorStop(1, 'rgba(255, 204, 102, 0)');
+    ctx.save();
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, gameWidth, gameHeight);
+    ctx.restore();
+  }
+
+  renderRoundBadge(ctx, gameWidth, gameHeight, scale) {
+    if (!this.roundBadge) return;
+    const { round, timer } = this.roundBadge;
+    const duration = CONFIG.ROUND_BADGE_DURATION;
+    const progress = timer / duration;
+
+    // Fade: quick in, hold, slow out
+    let alpha;
+    if (progress < 0.1) {
+      alpha = progress / 0.1;
+    } else if (progress > 0.7) {
+      alpha = (1 - progress) / 0.3;
+    } else {
+      alpha = 1;
+    }
+    alpha *= 0.5;
+
+    const size = Math.round(CONFIG.ROUND_BADGE_SIZE * scale);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold ${size}px monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`R${round}`, gameWidth / 2, gameHeight * 0.12);
+    ctx.restore();
+  }
+
   renderStreakFlash(ctx, gameWidth, gameHeight) {
     if (!this.streakFlash) return;
     const progress = this.streakFlash.timer / this.streakFlash.duration;
@@ -510,22 +589,29 @@ export class UI {
     ctx.restore();
   }
 
-  renderPauseOverlay(ctx, gameWidth, gameHeight, scale) {
+  renderPauseOverlay(ctx, gameWidth, gameHeight, scale, scoreManager) {
     ctx.save();
-    ctx.globalAlpha = 0.5;
+    ctx.globalAlpha = 0.3;
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, gameWidth, gameHeight);
 
-    ctx.globalAlpha = 0.6;
+    ctx.globalAlpha = 0.5;
     ctx.fillStyle = '#ffffff';
-    ctx.font = `bold ${Math.round(32 * scale)}px monospace`;
+    ctx.font = `${Math.round(28 * scale)}px monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('PAUSED', gameWidth / 2, gameHeight / 2);
+    ctx.fillText('PAUSED', gameWidth / 2, gameHeight / 2 - 15 * scale);
 
-    ctx.globalAlpha = 0.3;
-    ctx.font = `${Math.round(14 * scale)}px monospace`;
-    ctx.fillText('tap to resume', gameWidth / 2, gameHeight / 2 + 35 * scale);
+    // Show current score
+    if (scoreManager && scoreManager.score > 0) {
+      ctx.globalAlpha = 0.3;
+      ctx.font = `${Math.round(16 * scale)}px monospace`;
+      ctx.fillText(scoreManager.score.toLocaleString(), gameWidth / 2, gameHeight / 2 + 15 * scale);
+    }
+
+    ctx.globalAlpha = 0.25;
+    ctx.font = `${Math.round(13 * scale)}px monospace`;
+    ctx.fillText('return to resume', gameWidth / 2, gameHeight / 2 + 45 * scale);
 
     ctx.restore();
   }
@@ -605,8 +691,10 @@ export class UI {
     if (timer >= p4End) {
       ctx.save();
 
+      const isPB = scoreManager.isNewPersonalBest;
+
       // Restart button with capsule
-      const restartY = gameHeight * 0.85;
+      const restartY = isPB ? gameHeight * 0.88 : gameHeight * 0.85;
       ctx.globalAlpha = 0.3;
       ctx.fillStyle = '#ffffff';
       ctx.font = `${Math.round(14 * scale)}px monospace`;
@@ -630,18 +718,22 @@ export class UI {
       ctx.closePath();
       ctx.stroke();
 
-      // Save button with capsule — bottom-right
-      const saveX = gameWidth - 40 * scale;
-      const saveY = gameHeight * 0.92;
-      ctx.globalAlpha = 0.3;
-      ctx.textAlign = 'center';
-      ctx.fillStyle = scoreManager.isNewPersonalBest ? CONFIG.RING_COLOR : '#ffffff';
-      ctx.fillText('Save', saveX, saveY);
+      // Save button — centered + golden on PB, bottom-right otherwise
+      const saveX = isPB ? gameWidth / 2 : gameWidth - 40 * scale;
+      const saveY = isPB ? gameHeight * 0.78 : gameHeight * 0.92;
+      const saveColor = isPB ? CONFIG.RING_COLOR : '#ffffff';
+      const saveLabel = isPB ? 'Save Run' : 'Save';
 
-      ctx.strokeStyle = scoreManager.isNewPersonalBest ? CONFIG.RING_COLOR : '#ffffff';
-      ctx.globalAlpha = 0.15;
-      const sw = 60 * scale;
-      const sh = 26 * scale;
+      ctx.globalAlpha = isPB ? 0.5 : 0.3;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = saveColor;
+      ctx.font = `${isPB ? 'bold ' : ''}${Math.round((isPB ? 16 : 14) * scale)}px monospace`;
+      ctx.fillText(saveLabel, saveX, saveY);
+
+      ctx.strokeStyle = saveColor;
+      ctx.globalAlpha = isPB ? 0.25 : 0.15;
+      const sw = (isPB ? 100 : 60) * scale;
+      const sh = (isPB ? 30 : 26) * scale;
       const sr = sh / 2;
       ctx.beginPath();
       ctx.moveTo(saveX - sw / 2 + sr, saveY - sh / 2);

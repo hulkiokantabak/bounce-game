@@ -8,15 +8,22 @@
  *     onGameState(state)    — called every physics tick with full game state
  *     onRoundStart(round)   — called when a new round begins
  *     onRingResult(result)  — called after ring thread success or failure
+ *     onBounce(data)        — called when ball bounces off a surface
  *     onRunEnd(stats)       — called when a run ends
- *     getSurfaceHint(state) — return {x, y} to suggest a surface placement (shown as ghost)
- *     getCommentary(event)  — return string for in-game commentary text
+ *     getSurfaceHint(state) — return {x, y} or Promise<{x, y}> to suggest surface placement
+ *     getCommentary(event)  — return string or Promise<string> for in-game commentary
  *   }
+ *
+ * All callbacks are fire-and-forget. Promises are supported — results apply next frame.
+ * AI errors never break the game.
  *
  * Example: connect a local LLM
  *   window.BOUNCE_AI = {
  *     onRunEnd(stats) { fetch('/api/analyze', { method: 'POST', body: JSON.stringify(stats) }); },
- *     getCommentary(event) { return event === 'streak_3' ? 'Nice streak!' : null; }
+ *     async getCommentary(event) {
+ *       if (event === 'streak_5') return 'Great streak!';
+ *       return null;
+ *     }
  *   };
  */
 
@@ -25,10 +32,14 @@ export class AIHooks {
     this._provider = null;
     this._enabled = false;
     this._lastHintTime = 0;
-    this._hintCooldown = 0.5; // seconds between hint requests
+    this._hintCooldown = 0.5;
     this._surfaceHint = null;
     this._commentary = null;
     this._commentaryTimer = 0;
+    this._pendingHint = false;
+    this._pendingCommentary = false;
+    this._mood = null;
+    this._moodTimer = 0;
   }
 
   /** Check for and connect to an AI provider on window.BOUNCE_AI */
@@ -47,7 +58,7 @@ export class AIHooks {
     return this._enabled && this._provider !== null;
   }
 
-  /** Call provider method safely — never throws, never blocks gameplay */
+  /** Call provider method safely — supports sync and async returns */
   _call(method, ...args) {
     if (!this._enabled || !this._provider) return undefined;
     try {
@@ -60,6 +71,15 @@ export class AIHooks {
     return undefined;
   }
 
+  /** Handle a return value that might be a Promise */
+  _resolveAsync(result, callback) {
+    if (result && typeof result.then === 'function') {
+      result.then(val => { try { callback(val); } catch {} }).catch(() => {});
+    } else {
+      try { callback(result); } catch {}
+    }
+  }
+
   /** Notify AI of current game state (called each physics tick) */
   notifyState(state) {
     this._call('onGameState', state);
@@ -68,57 +88,86 @@ export class AIHooks {
   /** Notify AI of round start */
   notifyRoundStart(round) {
     this._call('onRoundStart', round);
-
-    // Request commentary
-    const text = this._call('getCommentary', `round_${round}`);
-    if (text && typeof text === 'string') {
-      this._commentary = text.substring(0, 40);
-      this._commentaryTimer = 2.0;
-    }
+    this._requestCommentary(`round_${round}`);
   }
 
   /** Notify AI of ring result */
   notifyRingResult(result) {
     this._call('onRingResult', result);
 
-    // Request commentary for notable events
     let event = result.success ? 'ring_success' : 'ring_fail';
     if (result.streak >= 3) event = `streak_${result.streak}`;
     if (result.isClean) event = 'clean';
 
-    const text = this._call('getCommentary', event);
-    if (text && typeof text === 'string') {
-      this._commentary = text.substring(0, 40);
-      this._commentaryTimer = 2.0;
-    }
+    this._requestCommentary(event);
+  }
+
+  /** Notify AI of ball bounce */
+  notifyBounce(data) {
+    this._call('onBounce', data);
   }
 
   /** Notify AI of run end */
   notifyRunEnd(stats) {
     this._call('onRunEnd', stats);
-
-    const text = this._call('getCommentary', 'run_end');
-    if (text && typeof text === 'string') {
-      this._commentary = text.substring(0, 40);
-      this._commentaryTimer = 2.5;
-    }
+    this._requestCommentary('run_end', 2.5);
   }
 
-  /** Request surface placement hint from AI */
+  /** Request commentary — supports async providers */
+  _requestCommentary(event, duration = 2.0) {
+    if (this._pendingCommentary) return;
+    const result = this._call('getCommentary', event);
+    if (result === undefined) return;
+
+    this._pendingCommentary = true;
+    this._resolveAsync(result, (text) => {
+      this._pendingCommentary = false;
+      if (text && typeof text === 'string') {
+        this._commentary = text.substring(0, 60);
+        this._commentaryTimer = duration;
+      }
+    });
+  }
+
+  /** Request surface placement hint from AI — supports async */
   requestSurfaceHint(state, gameTime) {
     if (!this._enabled) return null;
     if (gameTime - this._lastHintTime < this._hintCooldown) return this._surfaceHint;
+    if (this._pendingHint) return this._surfaceHint;
 
     this._lastHintTime = gameTime;
-    const hint = this._call('getSurfaceHint', state);
+    const result = this._call('getSurfaceHint', state);
+    if (result === undefined) return this._surfaceHint;
 
-    if (hint && typeof hint.x === 'number' && typeof hint.y === 'number') {
-      this._surfaceHint = { x: hint.x, y: hint.y };
-    } else {
-      this._surfaceHint = null;
-    }
+    this._pendingHint = true;
+    this._resolveAsync(result, (hint) => {
+      this._pendingHint = false;
+      if (hint && typeof hint.x === 'number' && typeof hint.y === 'number') {
+        this._surfaceHint = { x: hint.x, y: hint.y };
+      } else {
+        this._surfaceHint = null;
+      }
+    });
 
     return this._surfaceHint;
+  }
+
+  /** Request mood tint from AI */
+  requestMood() {
+    if (!this._enabled) return;
+    const result = this._call('getMood');
+    if (result === undefined) return;
+    this._resolveAsync(result, (mood) => {
+      if (mood && typeof mood.r === 'number' && typeof mood.g === 'number' && typeof mood.b === 'number') {
+        this._mood = {
+          r: Math.max(0, Math.min(255, Math.round(mood.r))),
+          g: Math.max(0, Math.min(255, Math.round(mood.g))),
+          b: Math.max(0, Math.min(255, Math.round(mood.b))),
+          intensity: Math.max(0, Math.min(0.03, mood.intensity || 0.01)),
+        };
+        this._moodTimer = 3.0;
+      }
+    });
   }
 
   /** Update timers */
@@ -129,7 +178,15 @@ export class AIHooks {
         this._commentary = null;
       }
     }
+    if (this._moodTimer > 0) {
+      this._moodTimer -= dt;
+      if (this._moodTimer <= 0) {
+        this._mood = null;
+      }
+    }
   }
+
+  getMood() { return this._mood; }
 
   /** Get current commentary text (or null) */
   getCommentary() {
@@ -144,9 +201,16 @@ export class AIHooks {
   /** Build a game state snapshot for AI consumption */
   buildState(game) {
     const ball = game.ball;
-    const ring = game.ringManager.rings[0];
     const gw = game.renderer.gameWidth;
     const gh = game.renderer.gameHeight;
+
+    const rings = game.ringManager.rings.filter(r => r.active).map(r => ({
+      cx: r.cx / gw,
+      cy: r.cy / gh,
+      gapCenter: r.gapCenter,
+      gapAngle: r.gapAngle,
+      radius: r.radius / gw,
+    }));
 
     return {
       state: game.state,
@@ -162,14 +226,8 @@ export class AIHooks {
         vy: ball.vy,
         alive: ball.alive,
       } : null,
-      ring: ring && ring.active ? {
-        cx: ring.cx / gw,
-        cy: ring.cy / gh,
-        gapCenter: ring.gapCenter,
-        gapAngle: ring.gapAngle,
-        radius: ring.radius / gw,
-      } : null,
-      surfaces: game.surfaces.surfaces.map(s => ({
+      rings,
+      surfaces: game.surfaces.surfaces.filter(s => !s.removed).map(s => ({
         x: s.x / gw,
         y: s.y / gh,
         hit: s.hit,

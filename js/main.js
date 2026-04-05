@@ -6,7 +6,7 @@ import { InputManager } from './input.js';
 import { UI } from './ui.js';
 import { RingManager } from './ring.js';
 import { ScoreManager } from './score.js';
-import { AudioManager, vibrate } from './audio.js';
+import { AudioManager, vibrate as _vibrate } from './audio.js';
 import { Leaderboard } from './leaderboard.js';
 import { ReplayRecorder, ReplayPlayer } from './replay.js';
 import { AIHooks } from './ai-hooks.js';
@@ -57,6 +57,9 @@ class Game {
     this.runEndInputReady = false;
     this.runDuration = 0;
 
+    // Ring approach audio state
+    this.approachAudioTriggered = false;
+
     // Menu constellations
     this.constellations = [];
     this.constellationsLoaded = false;
@@ -88,6 +91,16 @@ class Game {
     requestAnimationFrame((t) => this.loop(t));
   }
 
+  _vibrate(pattern) {
+    if (window.BounceAgent && window.BounceAgent.isSilent) return;
+    _vibrate(pattern);
+  }
+
+  _playAudio(method, ...args) {
+    if (window.BounceAgent && window.BounceAgent.isSilent) return;
+    this.audio[method](...args);
+  }
+
   handleTap(x, y) {
     this.audio.init();
 
@@ -107,8 +120,8 @@ class Game {
         if (!this.isInDeadZone(y)) {
           this.surfaces.place(x, y, this.renderer.scale, this.scoreManager.round, this.renderer.gameWidth);
           this.recorder.recordSurface(x, y, this.gameTime);
-          this.audio.playPlace();
-          vibrate(CONFIG.PLACE_VIBRATE);
+          this._playAudio('playPlace', y / this.renderer.gameHeight);
+          this._vibrate(CONFIG.PLACE_VIBRATE);
           this.ui.addSurfaceFlash(x, y);
         }
         break;
@@ -164,10 +177,11 @@ class Game {
 
   isSaveTap(x, y) {
     const { gameWidth, gameHeight, scale } = this.renderer;
-    const saveX = gameWidth - 40 * scale;
-    const saveY = gameHeight * 0.92;
-    const hitW = 70 * scale;
-    const hitH = 36 * scale;
+    const isPB = this.scoreManager.isNewPersonalBest;
+    const saveX = isPB ? gameWidth / 2 : gameWidth - 40 * scale;
+    const saveY = isPB ? gameHeight * 0.78 : gameHeight * 0.92;
+    const hitW = (isPB ? 110 : 70) * scale;
+    const hitH = (isPB ? 40 : 36) * scale;
     return x > saveX - hitW / 2 && x < saveX + hitW / 2 &&
            y > saveY - hitH / 2 && y < saveY + hitH / 2;
   }
@@ -217,13 +231,17 @@ class Game {
     this.runBounceTotal = 0;
     this.runRingsThreaded = 0;
 
-    // AI hooks
-    this.aiHooks.connect(); // re-check in case AI was attached after page load
+    // AI hooks + Agent events
+    this.aiHooks.connect();
     this.aiHooks.notifyRoundStart(this.scoreManager.round);
+    if (window.BounceAgent) {
+      window.BounceAgent._emit('roundStart', { round: this.scoreManager.round });
+      window.BounceAgent._emit('stateChange', { from: 'MENU', to: 'DROPPING' });
+    }
   }
 
   startNewRound() {
-    this.audio.playRoundTransition();
+    this._playAudio('playRoundTransition');
     this.scoreManager.nextRound();
 
     const { gameWidth, gameHeight, scale } = this.renderer;
@@ -238,11 +256,12 @@ class Game {
 
     this.state = State.DROPPING;
     this.aiHooks.notifyRoundStart(this.scoreManager.round);
+    if (window.BounceAgent) window.BounceAgent._emit('roundStart', { round: this.scoreManager.round });
     this.ui.triggerRoundSweep();
 
-    // Round number flash at center
-    if (this.scoreManager.round >= 3) {
-      this.ui.showHint(`R${this.scoreManager.round}`, gameWidth / 2, gameHeight * 0.15);
+    // Round badge — visible on all rounds from R2+
+    if (this.scoreManager.round >= 2) {
+      this.ui.triggerRoundBadge(this.scoreManager.round);
     }
   }
 
@@ -253,11 +272,11 @@ class Game {
     this.runDuration = this.gameTime;
 
     if (reason === 'ring_kill') {
-      this.audio.playRingKill();
+      this._playAudio('playRingKill');
     } else {
-      this.audio.playEnd();
+      this._playAudio('playEnd');
     }
-    vibrate(CONFIG.END_VIBRATE);
+    this._vibrate(CONFIG.END_VIBRATE);
 
     if (this.ball) {
       this.ball.alive = false;
@@ -275,14 +294,21 @@ class Game {
       round: this.scoreManager.round,
     });
 
-    // AI hooks
-    this.aiHooks.notifyRunEnd({
+    // AI hooks + Agent events
+    const endData = {
       score: this.scoreManager.score,
       round: this.scoreManager.round,
       streak: this.scoreManager.longestStreak,
       duration: this.runDuration,
       reason,
-    });
+      ringsThreaded: this.runRingsThreaded,
+      totalBounces: this.runBounceTotal,
+    };
+    this.aiHooks.notifyRunEnd(endData);
+    if (window.BounceAgent) {
+      window.BounceAgent._emit('runEnd', endData);
+      window.BounceAgent._emit('stateChange', { from: 'DROPPING', to: 'RUN_OVER' });
+    }
 
     // Save trail for menu ghost
     if (this.ball && this.ball.trail.length > 2) {
@@ -296,9 +322,9 @@ class Game {
     const { ring, ringIndex } = result;
     this.ringManager.onRingSuccess(ringIndex, this.ball, this.scoreManager.streak);
     this.ball.brightenTrail();
-    this.audio.playRingChime(this.scoreManager.streak);
+    this._playAudio('playRingChime', this.scoreManager.streak);
     this.runRingsThreaded++;
-    vibrate(CONFIG.RING_VIBRATE);
+    this._vibrate(CONFIG.RING_VIBRATE);
 
     // Record ring success
     this.recorder.recordRingHit(ringIndex, this.gameTime, true);
@@ -324,13 +350,16 @@ class Game {
     // Near-miss: ball passed through but close to edge (proximity < 0.3)
     const isClose = result.gapProximity < 0.3;
 
-    // AI hooks
-    this.aiHooks.notifyRingResult({
+    // AI hooks + Agent events
+    const ringResultData = {
       success: true, isClean, isClose,
       streak: this.scoreManager.streak,
       score: scoreGain,
       round: this.scoreManager.round,
-    });
+      gapProximity: result.gapProximity,
+    };
+    this.aiHooks.notifyRingResult(ringResultData);
+    if (window.BounceAgent) window.BounceAgent._emit('ringSuccess', ringResultData);
 
     if (scoreGain > 0) {
       // Show multiplier breakdown on first 5 ring successes
@@ -341,9 +370,15 @@ class Game {
       this.ui.addScorePop(ring.cx, ring.cy, scoreGain, this.scoreManager.streak > 1, isClean, showMult ? mult : 0);
     }
 
+    // CLEAN success effect — brief golden pulse
+    if (isClean) {
+      this.renderer.shake(0.5);
+      this.ui.triggerCleanFlash();
+    }
+
     // Near-miss audio shimmer
     if (isClose) {
-      this.audio.playNearMissShimmer();
+      this._playAudio('playNearMissShimmer');
     }
 
     // Near-miss text
@@ -372,6 +407,7 @@ class Game {
     // Check if we just exceeded personal best mid-run
     if (this.scoreManager.score > this.scoreManager.personalBest && this.scoreManager.personalBest > 0) {
       this.ui.triggerPBFlash();
+      this._playAudio('playPBChime');
     }
   }
 
@@ -380,13 +416,15 @@ class Game {
     // Record ring failure
     this.recorder.recordRingHit(result.ringIndex, this.gameTime, false);
 
-    // AI hooks
-    this.aiHooks.notifyRingResult({
+    // AI hooks + Agent events
+    const failData = {
       success: false, isClean: false, isClose: result.isNearGap,
       streak: this.scoreManager.streak,
       score: 0,
       round: this.scoreManager.round,
-    });
+    };
+    this.aiHooks.notifyRingResult(failData);
+    if (window.BounceAgent) window.BounceAgent._emit('ringFail', failData);
 
     // Near-death: hit the arc but was close to the gap
     if (result.isNearGap) {
@@ -501,13 +539,19 @@ class Game {
 
         // Wall bounce feedback
         if (this.ball.wallHit) {
-          this.audio.playWallBounce();
+          this._playAudio('playWallBounce');
           this.ui.addWallImpact(this.ball.wallHit.x, this.ball.wallHit.y);
         }
 
         // AI hooks: send state every tick during play
         if (this.aiHooks.isConnected) {
-          this.aiHooks.notifyState(this.aiHooks.buildState(this));
+          const aiState = this.aiHooks.buildState(this);
+          this.aiHooks.notifyState(aiState);
+          this.aiHooks.requestSurfaceHint(aiState, this.gameTime);
+          // Request mood every 2 seconds
+          if (Math.floor(this.gameTime * 0.5) !== Math.floor((this.gameTime - dt) * 0.5)) {
+            this.aiHooks.requestMood();
+          }
         }
 
         if (this.surfaces.checkCollision(this.ball)) {
@@ -515,11 +559,21 @@ class Game {
           this.scoreManager.onBounce();
           this.runBounceTotal++;
           const speed = Math.sqrt(this.ball.vx * this.ball.vx + this.ball.vy * this.ball.vy) / this.ball.scale;
-          this.audio.playBounce(speed);
-          vibrate(isFirstBounce ? 30 : CONFIG.BOUNCE_VIBRATE);
+          this._playAudio('playBounce', speed);
+          this._vibrate(isFirstBounce ? 30 : CONFIG.BOUNCE_VIBRATE);
           // Speed-scaled shake
           const shakeIntensity = Math.min(speed / 600, 2.0);
           this.renderer.shake(isFirstBounce ? 2.0 : shakeIntensity);
+
+          // First-bounce encouragement on R1
+          if (isFirstBounce) {
+            this.ui.showHint('nice!', this.ball.x, this.ball.y - this.ball.radius - 20 * this.renderer.scale);
+          }
+
+          // AI + Agent notifications
+          const bounceData = { x: this.ball.x, y: this.ball.y, vx: this.ball.vx, vy: this.ball.vy, speed, bounceCount: this.scoreManager.bounceCount };
+          this.aiHooks.notifyBounce(bounceData);
+          if (window.BounceAgent) window.BounceAgent._emit('bounce', bounceData);
         }
 
         this.ball.addTrailPoint(this.gameTime);
@@ -529,6 +583,23 @@ class Game {
         }
         this.ball.updateTrail(this.gameTime);
         this.surfaces.update(dt);
+
+        // Ring approach audio cue
+        const activeRings = this.ringManager.rings.filter(r => r.active && r.gapRevealed);
+        if (activeRings.length > 0 && this.ball) {
+          const ring = activeRings[0];
+          const dx = this.ball.x - ring.cx;
+          const dy = this.ball.y - ring.cy;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const maxDist = CONFIG.RING_APPROACH_DISTANCE * this.renderer.scale;
+          const approachFactor = Math.max(0, 1 - dist / maxDist);
+          if (approachFactor > 0.5 && !this.approachAudioTriggered) {
+            this.approachAudioTriggered = true;
+            this._playAudio('playApproachTone', approachFactor);
+          } else if (approachFactor < 0.2) {
+            this.approachAudioTriggered = false;
+          }
+        }
 
         const ringResult = this.ringManager.checkCollision(this.ball);
         if (ringResult) {
@@ -541,7 +612,7 @@ class Game {
         }
 
         if (this.ball.checkFloor(this.renderer.gameHeight)) {
-          this.ui.addDeathSplash(this.ball.x, this.renderer.gameHeight);
+          this.ui.addDeathSplash(this.ball.x, this.renderer.gameHeight, this.ball.trailColor);
           this.endRun('floor');
         }
 
@@ -677,6 +748,8 @@ class Game {
     this.ringManager.renderFlash(ctx, gameWidth, gameHeight);
     this.ui.renderStreakFlash(ctx, gameWidth, gameHeight);
     this.ui.renderRoundSweep(ctx, gameWidth, gameHeight);
+    this.ui.renderRoundBadge(ctx, gameWidth, gameHeight, scale);
+    this.ui.renderCleanFlash(ctx, gameWidth, gameHeight);
 
     // Surface flashes
     if (!inTrailHold) {
@@ -693,8 +766,18 @@ class Game {
     // Hints
     this.ui.renderHints(ctx, scale);
 
-    // AI commentary overlay
+    // AI overlay
     if (this.aiHooks.isConnected) {
+      // Connection indicator — subtle blue dot top-right
+      ctx.save();
+      ctx.globalAlpha = 0.1;
+      ctx.fillStyle = '#88ccff';
+      ctx.beginPath();
+      ctx.arc(gameWidth - 12 * scale, 12 * scale, 3 * scale, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // Commentary text
       const commentary = this.aiHooks.getCommentary();
       if (commentary) {
         ctx.save();
@@ -711,21 +794,34 @@ class Game {
       const hint = this.aiHooks.getSurfaceHint();
       if (hint && (this.state === State.DROPPING || this.state === State.RING_HIT)) {
         ctx.save();
-        ctx.globalAlpha = 0.15;
-        ctx.fillStyle = '#88ccff';
-        const halfLen = 40 * scale;
-        const halfThk = 2 * scale;
-        ctx.fillRect(hint.x - halfLen, hint.y - halfThk, halfLen * 2, halfThk * 2);
+        ctx.globalAlpha = 0.12;
+        ctx.strokeStyle = '#88ccff';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        const halfLen = (CONFIG.SURFACE_LENGTH * scale) / 2;
+        ctx.beginPath();
+        ctx.moveTo(hint.x - halfLen, hint.y);
+        ctx.lineTo(hint.x + halfLen, hint.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+
+      // AI mood tint
+      const mood = this.aiHooks.getMood();
+      if (mood) {
+        ctx.save();
+        ctx.globalAlpha = mood.intensity;
+        ctx.fillStyle = `rgb(${mood.r},${mood.g},${mood.b})`;
+        ctx.fillRect(0, 0, gameWidth, gameHeight);
         ctx.restore();
       }
     }
 
     if (this.state === State.DROPPING || this.state === State.RING_HIT) {
       this.ui.renderScore(ctx, gameWidth, gameHeight, scale, this.scoreManager);
-      // Bounce multiplier preview — hide on early rounds to reduce noise
-      if (this.scoreManager.round >= 3) {
-        this.ui.renderBounceMultiplier(ctx, this.ball, scale, this.scoreManager.bounceCount);
-      }
+      // Bounce multiplier preview
+      this.ui.renderBounceMultiplier(ctx, this.ball, scale, this.scoreManager.bounceCount);
       // Hint text on round 1
       if (this.scoreManager.round === 1 && this.ringManager.rings.length > 0) {
         const ring = this.ringManager.rings[0];
@@ -753,7 +849,7 @@ class Game {
 
     // Pause overlay (rendered outside screen shake transform)
     if (this.paused && this.state !== State.MENU) {
-      this.ui.renderPauseOverlay(ctx, gameWidth, gameHeight, scale);
+      this.ui.renderPauseOverlay(ctx, gameWidth, gameHeight, scale, this.scoreManager);
     }
   }
 
@@ -812,7 +908,11 @@ class Game {
     let delta = (timestamp - this.lastTimestamp) / 1000;
     this.lastTimestamp = timestamp;
 
-    delta = Math.min(delta, 3 * PHYSICS_STEP);
+    // Agent speed multiplier for training
+    const agentSpeed = (window.BounceAgent && window.BounceAgent.speedMultiplier) || 1;
+    delta *= agentSpeed;
+
+    delta = Math.min(delta, 6 * PHYSICS_STEP);
     this.accumulated += delta;
 
     while (this.accumulated >= PHYSICS_STEP) {

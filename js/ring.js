@@ -146,12 +146,14 @@ class Ring {
     ctx.lineCap = 'butt';
 
     if (this.gapRevealed) {
-      // Gap direction indicator — dotted line pointing toward gap
-      if (approachFactor < 0.5) {
+      // Gap direction indicator — dotted line pointing toward gap, fades smoothly as ball approaches
+      const indicatorAlpha = approachFactor < 0.3 ? CONFIG.RING_GAP_INDICATOR_OPACITY
+        : CONFIG.RING_GAP_INDICATOR_OPACITY * Math.max(0, 1 - (approachFactor - 0.3) / 0.7);
+      if (indicatorAlpha > 0.001) {
         const indicatorLen = this.radius * CONFIG.RING_GAP_INDICATOR_LENGTH;
         const gapDirX = Math.cos(this.gapCenter);
         const gapDirY = Math.sin(this.gapCenter);
-        ctx.globalAlpha = CONFIG.RING_GAP_INDICATOR_OPACITY;
+        ctx.globalAlpha = indicatorAlpha;
         ctx.setLineDash([3, 6]);
         ctx.lineWidth = 1;
         ctx.beginPath();

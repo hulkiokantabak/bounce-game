@@ -125,7 +125,7 @@ export const CONFIG = {
   PARTICLE_LIFE: 0.6,
 
   // Trail art
-  TRAIL_ART_BRIGHTEN_DURATION: 1.5,
+  TRAIL_ART_BRIGHTEN_DURATION: 2.5,
 
   // Touch
   DEAD_ZONE_TOP: 0.05,
@@ -173,6 +173,17 @@ export const CONFIG = {
   // Round 2: round transition sweep
   ROUND_SWEEP_DURATION: 0.3,
   ROUND_SWEEP_OPACITY: 0.05,
+
+  // Round 3: surface spawn animation
+  SURFACE_SPAWN_DURATION: 0.05,       // 50ms scale-in
+
+  // Round 3: spatial placement audio
+  PLACE_SOUND_FREQ_LOW: 600,
+  PLACE_SOUND_FREQ_HIGH: 1000,
+
+  // Round 3: round badge
+  ROUND_BADGE_DURATION: 1.2,
+  ROUND_BADGE_SIZE: 28,
 };
 
 export function hexToRgba(hex, alpha) {

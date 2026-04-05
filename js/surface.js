@@ -22,6 +22,10 @@ class Surface {
     // Run-end fade
     this.fading = false;
     this.fadeTimer = 0;
+
+    // Spawn animation
+    this.spawnTimer = 0;
+    this.spawnDuration = CONFIG.SURFACE_SPAWN_DURATION;
   }
 
   onHit(impactX) {
@@ -41,6 +45,11 @@ class Surface {
 
   update(dt) {
     if (this.removed) return;
+
+    // Spawn animation
+    if (this.spawnTimer < this.spawnDuration) {
+      this.spawnTimer += dt;
+    }
 
     if (this.decaying) {
       this.decayTimer += dt;
@@ -65,11 +74,17 @@ class Surface {
   render(ctx) {
     if (this.removed || this.opacity <= 0) return;
 
-    const left = this.x - this.halfLength;
-    const top = this.y - this.halfThickness;
-    const width = this.halfLength * 2;
-    const height = this.halfThickness * 2;
-    const radius = Math.min(this.halfThickness, this.halfLength);
+    // Spawn scale: 80% -> 100% over spawn duration
+    const spawnScale = this.spawnTimer >= this.spawnDuration ? 1.0
+      : 0.8 + 0.2 * (this.spawnTimer / this.spawnDuration);
+
+    const hl = this.halfLength * spawnScale;
+    const ht = this.halfThickness * spawnScale;
+    const left = this.x - hl;
+    const top = this.y - ht;
+    const width = hl * 2;
+    const height = ht * 2;
+    const radius = Math.min(ht, hl);
 
     ctx.save();
     ctx.globalAlpha = this.opacity;
