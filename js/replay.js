@@ -138,7 +138,6 @@ export class ReplayPlayer {
     if (!this.data || this.finished) return;
     if (!this.playing) return;
 
-    const prevTime = this.time;
     this.time += dt * this.speed;
 
     // Update active surfaces
@@ -155,12 +154,7 @@ export class ReplayPlayer {
       this.buildTrail();
     }
 
-    // Check if run ended
-    if (this.time >= this.duration && this.endTimer === 0) {
-      this.endTimer += dt;
-      this.freezeTrail();
-    }
-
+    // End sequence
     if (this.endTimer > 0) {
       this.endTimer += dt;
       const totalEnd = CONFIG.RUN_END_PAUSE + CONFIG.RUN_END_TRAIL_HOLD +
@@ -168,6 +162,9 @@ export class ReplayPlayer {
       if (this.endTimer >= totalEnd) {
         this.finished = true;
       }
+    } else if (this.time >= this.duration) {
+      this.endTimer = dt;
+      this.freezeTrail();
     }
   }
 

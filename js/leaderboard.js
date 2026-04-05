@@ -13,6 +13,7 @@ export class Leaderboard {
     this.onSaveComplete = null;
     this.onReplayRequest = null;
     this.pendingRunData = null;
+    this.saving = false;
 
     this.createGalleryDOM();
     this.createNameInputDOM();
@@ -47,7 +48,8 @@ export class Leaderboard {
 
   getPlayerName() {
     try {
-      return localStorage.getItem('bounce_player_name') || 'Anonymous';
+      const stored = localStorage.getItem('bounce_player_name');
+      return stored ? this.sanitizeName(stored) : 'Anonymous';
     } catch {
       return 'Anonymous';
     }
@@ -288,6 +290,10 @@ export class Leaderboard {
   }
 
   async confirmSave() {
+    // Prevent double-submit
+    if (this.saving) return;
+    this.saving = true;
+
     const input = this.nameOverlay.querySelector('#player-name');
     const name = this.sanitizeName(input.value);
     this.setPlayerName(name);
@@ -310,6 +316,7 @@ export class Leaderboard {
 
     this.nameOverlay.classList.add('hidden');
     this.pendingRunData = null;
+    this.saving = false;
     if (this.onSaveComplete) this.onSaveComplete();
   }
 

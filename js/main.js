@@ -273,7 +273,11 @@ class Game {
   // --- Replay ---
 
   async startReplay(entryId) {
+    // Suppress onClose callback — we're going to REPLAY, not MENU
+    const prevOnClose = this.leaderboard.onClose;
+    this.leaderboard.onClose = null;
     this.leaderboard.hide();
+    this.leaderboard.onClose = prevOnClose;
     this.state = State.REPLAY;
 
     const entry = await this.leaderboard.fetchReplayData(entryId);
