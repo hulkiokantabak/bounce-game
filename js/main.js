@@ -9,6 +9,9 @@ import { ScoreManager } from './score.js';
 import { AudioManager, vibrate } from './audio.js';
 import { Leaderboard } from './leaderboard.js';
 import { ReplayRecorder, ReplayPlayer } from './replay.js';
+import { AIHooks } from './ai-hooks.js';
+import { AgentAPI } from './agent.js';
+import { LifetimeStats } from './lifetime.js';
 
 const State = {
   MENU: 'MENU',
@@ -34,6 +37,10 @@ class Game {
     this.recorder = new ReplayRecorder();
     this.replayPlayer = new ReplayPlayer();
     this.replayLoading = false;
+    this.aiHooks = new AIHooks();
+    this.lifetime = new LifetimeStats();
+    this.runBounceTotal = 0;
+    this.runRingsThreaded = 0;
 
     this.state = State.MENU;
     this.ball = null;
@@ -57,6 +64,8 @@ class Game {
     this.fetchConstellations();
 
     this.input.onTap = (x, y) => this.handleTap(x, y);
+    this.ui.initMenuDust(this.lifetime);
+    this.ghostTrails = this.lifetime.generateGhostTrails();
 
     // Leaderboard replay callback
     this.leaderboard.onReplayRequest = (entryId) => this.startReplay(entryId);
@@ -69,6 +78,12 @@ class Game {
         this.lastTimestamp = 0;
       }
     });
+
+    // AI hooks: try to connect to window.BOUNCE_AI if present
+    this.aiHooks.connect();
+
+    // Expose Agent API for programmatic play
+    window.BounceAgent = new AgentAPI(this);
 
     requestAnimationFrame((t) => this.loop(t));
   }
@@ -199,6 +214,12 @@ class Game {
     this.runEndTimer = 0;
     this.runEndInputReady = false;
     this.ringHitTimer = 0;
+    this.runBounceTotal = 0;
+    this.runRingsThreaded = 0;
+
+    // AI hooks
+    this.aiHooks.connect(); // re-check in case AI was attached after page load
+    this.aiHooks.notifyRoundStart(this.scoreManager.round);
   }
 
   startNewRound() {
@@ -216,6 +237,13 @@ class Game {
     }
 
     this.state = State.DROPPING;
+    this.aiHooks.notifyRoundStart(this.scoreManager.round);
+    this.ui.triggerRoundSweep();
+
+    // Round number flash at center
+    if (this.scoreManager.round >= 3) {
+      this.ui.showHint(`R${this.scoreManager.round}`, gameWidth / 2, gameHeight * 0.15);
+    }
   }
 
   endRun(reason = 'floor') {
@@ -239,6 +267,23 @@ class Game {
     this.surfaces.fadeAll();
     this.scoreManager.checkPersonalBest();
 
+    // Lifetime stats
+    this.lifetime.recordRun({
+      ringsThreaded: this.runRingsThreaded,
+      totalBounces: this.runBounceTotal,
+      longestStreak: this.scoreManager.longestStreak,
+      round: this.scoreManager.round,
+    });
+
+    // AI hooks
+    this.aiHooks.notifyRunEnd({
+      score: this.scoreManager.score,
+      round: this.scoreManager.round,
+      streak: this.scoreManager.longestStreak,
+      duration: this.runDuration,
+      reason,
+    });
+
     // Save trail for menu ghost
     if (this.ball && this.ball.trail.length > 2) {
       const gw = this.renderer.gameWidth;
@@ -249,9 +294,10 @@ class Game {
 
   handleRingGap(result) {
     const { ring, ringIndex } = result;
-    this.ringManager.onRingSuccess(ringIndex, this.ball);
+    this.ringManager.onRingSuccess(ringIndex, this.ball, this.scoreManager.streak);
     this.ball.brightenTrail();
     this.audio.playRingChime(this.scoreManager.streak);
+    this.runRingsThreaded++;
     vibrate(CONFIG.RING_VIBRATE);
 
     // Record ring success
@@ -278,6 +324,14 @@ class Game {
     // Near-miss: ball passed through but close to edge (proximity < 0.3)
     const isClose = result.gapProximity < 0.3;
 
+    // AI hooks
+    this.aiHooks.notifyRingResult({
+      success: true, isClean, isClose,
+      streak: this.scoreManager.streak,
+      score: scoreGain,
+      round: this.scoreManager.round,
+    });
+
     if (scoreGain > 0) {
       // Show multiplier breakdown on first 5 ring successes
       const totalRings = this.scoreManager.streak + (this.scoreManager.round - 1);
@@ -287,17 +341,27 @@ class Game {
       this.ui.addScorePop(ring.cx, ring.cy, scoreGain, this.scoreManager.streak > 1, isClean, showMult ? mult : 0);
     }
 
+    // Near-miss audio shimmer
+    if (isClose) {
+      this.audio.playNearMissShimmer();
+    }
+
     // Near-miss text
     if (isClose && !isClean) {
       this.ui.showHint('CLOSE!', ring.cx, ring.cy - ring.radius - 20 * this.renderer.scale);
     }
 
-    // Ring success particles
-    this.ui.spawnRingParticles(ring.cx, ring.cy, this.renderer.scale);
+    // Ring success particles (escalate with streak)
+    this.ui.spawnRingParticles(ring.cx, ring.cy, this.renderer.scale, this.scoreManager.streak);
 
     // Update trail color based on streak
     if (this.ball) {
       this.ball.setTrailColorForStreak(this.scoreManager.streak);
+    }
+
+    // Streak milestone visual
+    if (this.scoreManager.streak === 5 || this.scoreManager.streak === 10) {
+      this.ui.triggerStreakFlash(this.scoreManager.streak);
     }
 
     // Score explanation on very first ring success
@@ -315,6 +379,14 @@ class Game {
     result.ring.startShatter(result.collisionX, result.collisionY);
     // Record ring failure
     this.recorder.recordRingHit(result.ringIndex, this.gameTime, false);
+
+    // AI hooks
+    this.aiHooks.notifyRingResult({
+      success: false, isClean: false, isClose: result.isNearGap,
+      streak: this.scoreManager.streak,
+      score: 0,
+      round: this.scoreManager.round,
+    });
 
     // Near-death: hit the arc but was close to the gap
     if (result.isNearGap) {
@@ -406,6 +478,7 @@ class Game {
     this.ringManager.update(dt);
     this.renderer.updateShake(dt);
     this.ui.update(dt);
+    this.aiHooks.update(dt);
 
     switch (this.state) {
       case State.MENU:
@@ -432,9 +505,15 @@ class Game {
           this.ui.addWallImpact(this.ball.wallHit.x, this.ball.wallHit.y);
         }
 
+        // AI hooks: send state every tick during play
+        if (this.aiHooks.isConnected) {
+          this.aiHooks.notifyState(this.aiHooks.buildState(this));
+        }
+
         if (this.surfaces.checkCollision(this.ball)) {
           const isFirstBounce = this.scoreManager.bounceCount === 0 && this.scoreManager.round <= 2;
           this.scoreManager.onBounce();
+          this.runBounceTotal++;
           const speed = Math.sqrt(this.ball.vx * this.ball.vx + this.ball.vy * this.ball.vy) / this.ball.scale;
           this.audio.playBounce(speed);
           vibrate(isFirstBounce ? 30 : CONFIG.BOUNCE_VIBRATE);
@@ -524,7 +603,8 @@ class Game {
     ctx.save();
     ctx.translate(this.renderer.shakeX, this.renderer.shakeY);
 
-    this.renderer.clear();
+    this.renderer.clear(this.scoreManager.round);
+    this.renderer.drawVignette(this.scoreManager.round);
 
     if (this.state === State.MENU || this.state === State.LEADERBOARD) {
       // Render ghost trail from last run
@@ -542,9 +622,10 @@ class Game {
         ctx.stroke();
         ctx.restore();
       }
-      // Render constellations behind menu
+      // Render ghost trails and constellations behind menu
+      this.renderGhostTrails(ctx, gameWidth, gameHeight);
       this.renderConstellations(ctx, gameWidth, gameHeight);
-      this.ui.renderMenu(ctx, gameWidth, gameHeight, scale, this.scoreManager.personalBest);
+      this.ui.renderMenu(ctx, gameWidth, gameHeight, scale, this.scoreManager.personalBest, this.lifetime);
       ctx.restore();
       return;
     }
@@ -594,6 +675,8 @@ class Game {
     }
 
     this.ringManager.renderFlash(ctx, gameWidth, gameHeight);
+    this.ui.renderStreakFlash(ctx, gameWidth, gameHeight);
+    this.ui.renderRoundSweep(ctx, gameWidth, gameHeight);
 
     // Surface flashes
     if (!inTrailHold) {
@@ -609,6 +692,33 @@ class Game {
 
     // Hints
     this.ui.renderHints(ctx, scale);
+
+    // AI commentary overlay
+    if (this.aiHooks.isConnected) {
+      const commentary = this.aiHooks.getCommentary();
+      if (commentary) {
+        ctx.save();
+        ctx.globalAlpha = Math.min(this.aiHooks._commentaryTimer / 0.3, 1) * 0.5;
+        ctx.fillStyle = '#88ccff';
+        ctx.font = `${Math.round(11 * scale)}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(commentary, gameWidth / 2, 40 * scale);
+        ctx.restore();
+      }
+
+      // AI surface hint ghost
+      const hint = this.aiHooks.getSurfaceHint();
+      if (hint && (this.state === State.DROPPING || this.state === State.RING_HIT)) {
+        ctx.save();
+        ctx.globalAlpha = 0.15;
+        ctx.fillStyle = '#88ccff';
+        const halfLen = 40 * scale;
+        const halfThk = 2 * scale;
+        ctx.fillRect(hint.x - halfLen, hint.y - halfThk, halfLen * 2, halfThk * 2);
+        ctx.restore();
+      }
+    }
 
     if (this.state === State.DROPPING || this.state === State.RING_HIT) {
       this.ui.renderScore(ctx, gameWidth, gameHeight, scale, this.scoreManager);
@@ -633,7 +743,7 @@ class Game {
     }
 
     if (isRunOver) {
-      this.ui.renderRunEnd(ctx, gameWidth, gameHeight, scale, this.scoreManager, this.runEndTimer);
+      this.ui.renderRunEnd(ctx, gameWidth, gameHeight, scale, this.scoreManager, this.runEndTimer, this.lifetime);
     }
 
     ctx.restore();
@@ -645,6 +755,28 @@ class Game {
     if (this.paused && this.state !== State.MENU) {
       this.ui.renderPauseOverlay(ctx, gameWidth, gameHeight, scale);
     }
+  }
+
+  renderGhostTrails(ctx, gameWidth, gameHeight) {
+    if (!this.ghostTrails || this.ghostTrails.length === 0) return;
+
+    ctx.save();
+    ctx.globalAlpha = 0.04;
+    ctx.strokeStyle = CONFIG.BALL_COLOR;
+    ctx.lineWidth = CONFIG.TRAIL_WIDTH * this.renderer.scale;
+    ctx.lineCap = 'round';
+
+    for (const trail of this.ghostTrails) {
+      if (trail.length < 2) continue;
+      ctx.beginPath();
+      ctx.moveTo(trail[0].x * gameWidth, trail[0].y * gameHeight);
+      for (let i = 1; i < trail.length; i++) {
+        ctx.lineTo(trail[i].x * gameWidth, trail[i].y * gameHeight);
+      }
+      ctx.stroke();
+    }
+
+    ctx.restore();
   }
 
   renderConstellations(ctx, gameWidth, gameHeight) {

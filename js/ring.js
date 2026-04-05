@@ -1,7 +1,7 @@
 import { CONFIG } from './config.js';
 
 class Ring {
-  constructor(cx, cy, radius, thickness, gapAngle, gapCenter, scale, isDual, isRingA) {
+  constructor(cx, cy, radius, thickness, gapAngle, gapCenter, scale, isDual, isRingA, round) {
     this.cx = cx;
     this.cy = cy;
     this.radius = radius;
@@ -24,6 +24,12 @@ class Ring {
     this.shatterFragments = [];
     this.shatterTimer = 0;
     this.shatterDone = false;
+
+    this.round = round || 1;
+
+    // Pulse speed ramps with round
+    const rampT = Math.min((this.round - 1) / (CONFIG.RING_PULSE_SPEED_RAMP_ROUND - 1), 1);
+    this.pulseSpeed = CONFIG.RING_PULSE_SPEED + (CONFIG.RING_PULSE_SPEED_MAX - CONFIG.RING_PULSE_SPEED) * rampT;
 
     // Dual-ring B: gap hidden until Ring A threaded
     this.gapRevealed = !isDual || isRingA;
@@ -122,7 +128,7 @@ class Ring {
     if (!this.active) return;
 
     // Pulse: 60-100% opacity on arc body
-    const t = this.pulseTime * CONFIG.RING_PULSE_SPEED;
+    const t = this.pulseTime * this.pulseSpeed;
     const pulse = 0.6 + 0.4 * (0.5 + 0.5 * Math.sin(t * Math.PI * 2));
     let brightness = (this.isDual && this.isRingA) ? Math.min(pulse + 0.15, 1.0) : pulse;
 
@@ -156,28 +162,57 @@ class Ring {
         ctx.lineWidth = this.thickness;
       }
 
+      // Outer glow at high rounds
+      if (this.round >= CONFIG.RING_OUTER_GLOW_ROUND) {
+        ctx.globalAlpha = brightness * 0.1;
+        ctx.lineWidth = this.thickness + 4;
+        ctx.beginPath();
+        ctx.arc(this.cx, this.cy, this.radius, gapEnd, gapStart + Math.PI * 2);
+        ctx.stroke();
+        ctx.lineWidth = this.thickness;
+      }
+
       // Arc (non-gap) at pulsing opacity
       ctx.globalAlpha = brightness;
       ctx.beginPath();
       ctx.arc(this.cx, this.cy, this.radius, gapEnd, gapStart + Math.PI * 2);
       ctx.stroke();
 
-      // Gap edges at 100% opacity — bright dots
-      ctx.globalAlpha = 1.0;
-      ctx.fillStyle = CONFIG.RING_COLOR;
+      // Gap edges — bright dots (pulse independently at high rounds)
       const dotR = this.thickness * 0.35;
+      if (this.round >= CONFIG.RING_DOT_PULSE_ROUND) {
+        const dotPulse1 = 0.7 + 0.3 * Math.sin(this.pulseTime * 3.5);
+        const dotPulse2 = 0.7 + 0.3 * Math.sin(this.pulseTime * 3.5 + 1.2);
+        ctx.globalAlpha = dotPulse1;
+        ctx.fillStyle = CONFIG.RING_COLOR;
+        const sx = this.cx + Math.cos(gapStart) * this.radius;
+        const sy = this.cy + Math.sin(gapStart) * this.radius;
+        ctx.beginPath();
+        ctx.arc(sx, sy, dotR, 0, Math.PI * 2);
+        ctx.fill();
 
-      const sx = this.cx + Math.cos(gapStart) * this.radius;
-      const sy = this.cy + Math.sin(gapStart) * this.radius;
-      ctx.beginPath();
-      ctx.arc(sx, sy, dotR, 0, Math.PI * 2);
-      ctx.fill();
+        ctx.globalAlpha = dotPulse2;
+        const ex = this.cx + Math.cos(gapEnd) * this.radius;
+        const ey = this.cy + Math.sin(gapEnd) * this.radius;
+        ctx.beginPath();
+        ctx.arc(ex, ey, dotR, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.globalAlpha = 1.0;
+        ctx.fillStyle = CONFIG.RING_COLOR;
 
-      const ex = this.cx + Math.cos(gapEnd) * this.radius;
-      const ey = this.cy + Math.sin(gapEnd) * this.radius;
-      ctx.beginPath();
-      ctx.arc(ex, ey, dotR, 0, Math.PI * 2);
-      ctx.fill();
+        const sx = this.cx + Math.cos(gapStart) * this.radius;
+        const sy = this.cy + Math.sin(gapStart) * this.radius;
+        ctx.beginPath();
+        ctx.arc(sx, sy, dotR, 0, Math.PI * 2);
+        ctx.fill();
+
+        const ex = this.cx + Math.cos(gapEnd) * this.radius;
+        const ey = this.cy + Math.sin(gapEnd) * this.radius;
+        ctx.beginPath();
+        ctx.arc(ex, ey, dotR, 0, Math.PI * 2);
+        ctx.fill();
+      }
     } else {
       // Ring B before A threaded: full ring, dimmer
       ctx.globalAlpha = brightness * 0.4;
@@ -270,11 +305,11 @@ export class RingManager {
     } else {
       pos = this.findPosition(minX, maxX, minY, maxY, ringRadius, this.lastPosition);
     }
-    this.rings.push(new Ring(pos.x, pos.y, ringRadius, thickness, gapAngle, gapCenter, scale, this.isDualRound, true));
+    this.rings.push(new Ring(pos.x, pos.y, ringRadius, thickness, gapAngle, gapCenter, scale, this.isDualRound, true, round));
 
     if (this.isDualRound) {
       const posB = this.findPosition(minX, maxX, minY, maxY, ringRadius, pos);
-      this.rings.push(new Ring(posB.x, posB.y, ringRadius, thickness, gapAngle, 0, scale, true, false));
+      this.rings.push(new Ring(posB.x, posB.y, ringRadius, thickness, gapAngle, 0, scale, true, false, round));
     }
 
     this.lastPosition = pos;
@@ -342,11 +377,12 @@ export class RingManager {
     return null;
   }
 
-  onRingSuccess(ringIndex, ball) {
+  onRingSuccess(ringIndex, ball, streak) {
     const ring = this.rings[ringIndex];
     ring.onSuccess();
     this.flashing = true;
     this.flashTimer = 0;
+    this.flashStreak = streak || 0;
 
     // If Ring A of dual round, reveal Ring B's gap based on exit angle
     if (ring.isDual && ring.isRingA && this.rings.length > 1) {
@@ -384,7 +420,11 @@ export class RingManager {
 
   renderFlash(ctx, gameWidth, gameHeight) {
     if (!this.flashing) return;
-    const flashAlpha = Math.max(0, 0.4 * (1 - this.flashTimer / 0.35));
+    const baseAlpha = Math.min(
+      CONFIG.SUCCESS_FLASH_BASE + (this.flashStreak || 0) * CONFIG.SUCCESS_FLASH_STREAK_STEP,
+      CONFIG.SUCCESS_FLASH_MAX
+    );
+    const flashAlpha = Math.max(0, baseAlpha * (1 - this.flashTimer / 0.35));
     ctx.save();
     ctx.globalAlpha = flashAlpha;
     ctx.fillStyle = CONFIG.RING_COLOR;

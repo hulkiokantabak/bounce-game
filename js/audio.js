@@ -82,7 +82,7 @@ export class AudioManager {
     const pitchMult = 1 + (streak || 0) * 0.05;
     const baseFreq = CONFIG.RING_CHIME_FREQ * pitchMult;
 
-    // Fundamental
+    // Fundamental — always plays
     const osc1 = this.ctx.createOscillator();
     const gain1 = this.ctx.createGain();
     osc1.type = 'sine';
@@ -94,7 +94,7 @@ export class AudioManager {
     osc1.start(now);
     osc1.stop(now + 0.2);
 
-    // Overtone (octave above, softer)
+    // Overtone (octave above, softer) — always plays
     const osc2 = this.ctx.createOscillator();
     const gain2 = this.ctx.createGain();
     osc2.type = 'sine';
@@ -106,17 +106,51 @@ export class AudioManager {
     osc2.start(now);
     osc2.stop(now + 0.15);
 
-    // Third harmonic (5th interval) for warmth
-    const osc3 = this.ctx.createOscillator();
-    const gain3 = this.ctx.createGain();
-    osc3.type = 'sine';
-    osc3.frequency.setValueAtTime(baseFreq * 1.5, now);
-    gain3.gain.setValueAtTime(0.06, now);
-    gain3.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
-    osc3.connect(gain3);
-    gain3.connect(this.ctx.destination);
-    osc3.start(now);
-    osc3.stop(now + 0.18);
+    // Major third — unlocks at streak 4+ (chord progression)
+    if ((streak || 0) >= 4) {
+      const osc3 = this.ctx.createOscillator();
+      const gain3 = this.ctx.createGain();
+      osc3.type = 'sine';
+      osc3.frequency.setValueAtTime(baseFreq * 1.26, now); // major third
+      gain3.gain.setValueAtTime(0.08, now);
+      gain3.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+      osc3.connect(gain3);
+      gain3.connect(this.ctx.destination);
+      osc3.start(now);
+      osc3.stop(now + 0.18);
+    }
+
+    // Perfect fifth — unlocks at streak 7+ (full chord)
+    if ((streak || 0) >= 7) {
+      const osc4 = this.ctx.createOscillator();
+      const gain4 = this.ctx.createGain();
+      osc4.type = 'sine';
+      osc4.frequency.setValueAtTime(baseFreq * 1.5, now); // perfect fifth
+      gain4.gain.setValueAtTime(0.06, now);
+      gain4.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+      osc4.connect(gain4);
+      gain4.connect(this.ctx.destination);
+      osc4.start(now);
+      osc4.stop(now + 0.2);
+    }
+  }
+
+  playNearMissShimmer() {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1200, now);
+    osc.frequency.exponentialRampToValueAtTime(1800, now + 0.08);
+    gain.gain.setValueAtTime(0.06, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.08);
   }
 
   playRingKill() {

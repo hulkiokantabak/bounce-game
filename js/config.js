@@ -130,6 +130,49 @@ export const CONFIG = {
   // Touch
   DEAD_ZONE_TOP: 0.05,
   DEAD_ZONE_BOTTOM: 0.05,
+
+  // Progression visuals
+  BG_COLOR_WARM: '#0d0a12',       // warm indigo tint for later rounds
+  BG_WARM_START_ROUND: 4,
+  BG_WARM_FULL_ROUND: 20,
+  TRAIL_BASE_COLORS: ['#fff5e6', '#fff5e6', '#fff5e6', '#fff0d0', '#fff0d0', '#fff0d0', '#ffe8b8', '#ffe0a0'],
+  GLOW_BOOST_ROUND: 5,            // ball glow +20% at this round
+  TRAIL_WIDTH_BOOST_ROUND: 10,    // trail width 2 → 2.5 at this round
+  RING_PULSE_SPEED_MAX: 1.8,
+  RING_PULSE_SPEED_RAMP_ROUND: 10,
+
+  // Streak milestones
+  STREAK_MILESTONE_5_FLASH_TINT: '#ffcc66',
+  STREAK_MILESTONE_10_FLASH_TINT: '#ffaa44',
+  STREAK_MILESTONE_10_FLASH_DURATION: 0.5,
+
+  // Lifetime stats menu
+  MENU_STAT_ROTATE_INTERVAL: 4.0,
+  MENU_STAT_FADE_TIME: 0.5,
+
+  // Round 2: escalating success
+  PARTICLE_STREAK_BONUS: 4,        // +4 particles per streak level
+  PARTICLE_MAX: 28,
+  SUCCESS_FLASH_BASE: 0.4,
+  SUCCESS_FLASH_STREAK_STEP: 0.05,
+  SUCCESS_FLASH_MAX: 0.7,
+
+  // Round 2: ring evolution
+  RING_OUTER_GLOW_ROUND: 8,
+  RING_DOT_PULSE_ROUND: 12,
+
+  // Round 2: vignette
+  VIGNETTE_START_ROUND: 10,
+  VIGNETTE_OPACITY: 0.03,
+
+  // Round 2: menu dust
+  MENU_DUST_AFTER_50: 4,
+  MENU_DUST_AFTER_200: 10,
+  MENU_DUST_SPEED: 8,
+
+  // Round 2: round transition sweep
+  ROUND_SWEEP_DURATION: 0.3,
+  ROUND_SWEEP_OPACITY: 0.05,
 };
 
 export function hexToRgba(hex, alpha) {

@@ -4,7 +4,9 @@ export class Ball {
   constructor(gameWidth, gameHeight, scale, round = 1, speedMult = 1.0) {
     this.scale = scale;
     this.radius = CONFIG.BALL_RADIUS * scale;
-    this.glowRadius = CONFIG.BALL_GLOW_RADIUS * scale;
+    // Glow boost at milestone round
+    const glowMult = round >= CONFIG.GLOW_BOOST_ROUND ? 1.2 : 1.0;
+    this.glowRadius = CONFIG.BALL_GLOW_RADIUS * scale * glowMult;
     this.speedMult = speedMult;
     this.round = round;
 
@@ -30,8 +32,15 @@ export class Ball {
     this.trailFrozen = false;
     this.trailCounter = 0;
     this.trailBrighten = 0;
-    this.trailColor = CONFIG.BALL_COLOR;
     this.trailArtTimer = 0;
+
+    // Base trail color warms with round progression
+    const colorIdx = Math.min(round - 1, CONFIG.TRAIL_BASE_COLORS.length - 1);
+    this.baseTrailColor = CONFIG.TRAIL_BASE_COLORS[Math.max(0, colorIdx)];
+    this.trailColor = this.baseTrailColor;
+
+    // Trail width boost at milestone
+    this.trailWidthMult = round >= CONFIG.TRAIL_WIDTH_BOOST_ROUND ? 1.25 : 1.0;
   }
 
   update(dt) {
@@ -98,7 +107,7 @@ export class Ball {
     } else if (streak >= 1) {
       this.trailColor = '#fff0d0'; // warm white
     } else {
-      this.trailColor = CONFIG.BALL_COLOR;
+      this.trailColor = this.baseTrailColor || CONFIG.BALL_COLOR;
     }
   }
 
@@ -144,7 +153,7 @@ export class Ball {
   renderTrail(ctx, currentTime) {
     if (this.trail.length < 2) return;
 
-    ctx.lineWidth = CONFIG.TRAIL_WIDTH * this.scale;
+    ctx.lineWidth = CONFIG.TRAIL_WIDTH * this.scale * (this.trailWidthMult || 1);
     ctx.lineCap = 'round';
 
     const color = this.trailColor || CONFIG.BALL_COLOR;

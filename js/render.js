@@ -61,13 +61,49 @@ export class Renderer {
     }
   }
 
-  clear() {
+  clear(round) {
     const { ctx, gameWidth, gameHeight } = this;
+
+    // Background warms subtly with progression
+    let bgBottom = CONFIG.BG_COLOR;
+    let bgTop = '#12121a';
+    if (round >= CONFIG.BG_WARM_START_ROUND) {
+      const t = Math.min((round - CONFIG.BG_WARM_START_ROUND) / (CONFIG.BG_WARM_FULL_ROUND - CONFIG.BG_WARM_START_ROUND), 1);
+      bgBottom = this._lerpColor(CONFIG.BG_COLOR, CONFIG.BG_COLOR_WARM, t);
+      bgTop = this._lerpColor('#12121a', '#14111e', t);
+    }
+
     const grad = ctx.createLinearGradient(0, 0, 0, gameHeight);
-    grad.addColorStop(0, '#12121a');
-    grad.addColorStop(1, CONFIG.BG_COLOR);
+    grad.addColorStop(0, bgTop);
+    grad.addColorStop(1, bgBottom);
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, gameWidth, gameHeight);
+  }
+
+  _lerpColor(a, b, t) {
+    const ar = parseInt(a.slice(1, 3), 16), ag = parseInt(a.slice(3, 5), 16), ab = parseInt(a.slice(5, 7), 16);
+    const br = parseInt(b.slice(1, 3), 16), bg = parseInt(b.slice(3, 5), 16), bb = parseInt(b.slice(5, 7), 16);
+    const r = Math.round(ar + (br - ar) * t);
+    const g = Math.round(ag + (bg - ag) * t);
+    const bl = Math.round(ab + (bb - ab) * t);
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${bl.toString(16).padStart(2, '0')}`;
+  }
+
+  drawVignette(round) {
+    if (round < CONFIG.VIGNETTE_START_ROUND) return;
+    const { ctx, gameWidth, gameHeight } = this;
+    const cx = gameWidth / 2;
+    const cy = gameHeight / 2;
+    const maxR = Math.sqrt(cx * cx + cy * cy);
+
+    const grad = ctx.createRadialGradient(cx, cy, maxR * 0.6, cx, cy, maxR);
+    grad.addColorStop(0, 'rgba(0,0,0,0)');
+    grad.addColorStop(1, `rgba(0,0,0,${CONFIG.VIGNETTE_OPACITY})`);
+
+    ctx.save();
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, gameWidth, gameHeight);
+    ctx.restore();
   }
 
   drawDeathLine() {

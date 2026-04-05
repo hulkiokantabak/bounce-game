@@ -11,10 +11,54 @@ export class UI {
     this.deathSplashes = [];
     this.hints = [];
     this.transitionDip = 0;
+
+    // Lifetime stat rotator for menu
+    this.menuStatIndex = 0;
+    this.menuStatTimer = 0;
+    this.menuStatFade = 1;
+
+    // Streak milestone flash
+    this.streakFlash = null;
+
+    // Menu dust particles
+    this.menuDust = [];
+
+    // Round transition sweep
+    this.roundSweep = null;
   }
 
   updateMenu(dt) {
     this.menuPulseTime += dt;
+
+    // Update dust particles
+    for (const d of this.menuDust) {
+      d.x += d.vx * dt;
+      d.y += d.vy * dt;
+      // Wrap
+      if (d.x < -0.05) d.x = 1.05;
+      if (d.x > 1.05) d.x = -0.05;
+      if (d.y < -0.05) d.y = 1.05;
+      if (d.y > 1.05) d.y = -0.05;
+    }
+  }
+
+  initMenuDust(lifetime) {
+    const runs = lifetime ? lifetime.stats.totalRuns : 0;
+    let count = 0;
+    if (runs >= 200) count = CONFIG.MENU_DUST_AFTER_200;
+    else if (runs >= 50) count = CONFIG.MENU_DUST_AFTER_50;
+
+    this.menuDust = [];
+    for (let i = 0; i < count; i++) {
+      this.menuDust.push({
+        x: Math.random(),
+        y: Math.random(),
+        vx: (Math.random() - 0.5) * 0.005,
+        vy: (Math.random() - 0.5) * 0.003,
+        size: 1 + Math.random() * 1.5,
+        alpha: 0.03 + Math.random() * 0.05,
+      });
+    }
   }
 
   update(dt) {
@@ -59,6 +103,39 @@ export class UI {
     if (this.transitionDip > 0) {
       this.transitionDip = Math.max(0, this.transitionDip - dt * 12);
     }
+
+    // Round sweep
+    if (this.roundSweep) {
+      this.roundSweep.timer += dt;
+      if (this.roundSweep.timer >= CONFIG.ROUND_SWEEP_DURATION) {
+        this.roundSweep = null;
+      }
+    }
+
+    // Streak milestone flash
+    if (this.streakFlash) {
+      this.streakFlash.timer += dt;
+      if (this.streakFlash.timer >= this.streakFlash.duration) {
+        this.streakFlash = null;
+      }
+    }
+
+    // Menu stat rotation
+    this.menuStatTimer += dt;
+    const interval = CONFIG.MENU_STAT_ROTATE_INTERVAL;
+    if (this.menuStatTimer >= interval) {
+      this.menuStatTimer -= interval;
+      this.menuStatIndex++;
+    }
+    // Fade in/out within cycle
+    const cycleT = this.menuStatTimer / interval;
+    if (cycleT < 0.1) {
+      this.menuStatFade = cycleT / 0.1;
+    } else if (cycleT > 0.9) {
+      this.menuStatFade = (1 - cycleT) / 0.1;
+    } else {
+      this.menuStatFade = 1;
+    }
   }
 
   addScorePop(x, y, score, isStreak, isClean, mult) {
@@ -72,10 +149,15 @@ export class UI {
     this.surfaceFlashes.push({ x, y, timer: 0 });
   }
 
-  spawnRingParticles(x, y, scale) {
-    for (let i = 0; i < CONFIG.RING_SUCCESS_PARTICLES; i++) {
-      const angle = (Math.PI * 2 / CONFIG.RING_SUCCESS_PARTICLES) * i + Math.random() * 0.3;
-      const speed = CONFIG.PARTICLE_SPEED * scale * (0.5 + Math.random() * 0.5);
+  spawnRingParticles(x, y, scale, streak) {
+    const count = Math.min(
+      CONFIG.RING_SUCCESS_PARTICLES + (streak || 0) * CONFIG.PARTICLE_STREAK_BONUS,
+      CONFIG.PARTICLE_MAX
+    );
+    const speedMult = 1 + (streak || 0) * 0.08;
+    for (let i = 0; i < count; i++) {
+      const angle = (Math.PI * 2 / count) * i + Math.random() * 0.3;
+      const speed = CONFIG.PARTICLE_SPEED * scale * (0.5 + Math.random() * 0.5) * speedMult;
       this.particles.push({
         x,
         y,
@@ -103,18 +185,33 @@ export class UI {
     this.transitionDip = 1.0;
   }
 
+  triggerRoundSweep() {
+    this.roundSweep = { timer: 0 };
+  }
+
   triggerPBFlash() {
     this.pbFlashTimer = 1.0;
   }
 
-  renderMenu(ctx, gameWidth, gameHeight, scale, personalBest) {
-    // Pulsing "BOUNCE" — 60-100% opacity, gold
+  triggerStreakFlash(streak) {
+    if (streak === 5) {
+      this.streakFlash = { tint: CONFIG.STREAK_MILESTONE_5_FLASH_TINT, duration: 0.35, timer: 0 };
+    } else if (streak >= 10) {
+      this.streakFlash = { tint: CONFIG.STREAK_MILESTONE_10_FLASH_TINT, duration: CONFIG.STREAK_MILESTONE_10_FLASH_DURATION, timer: 0 };
+    }
+  }
+
+  renderMenu(ctx, gameWidth, gameHeight, scale, personalBest, lifetime) {
+    // Pulsing "BOUNCE" — 60-100% opacity, color evolves with lifetime
     const t = this.menuPulseTime * CONFIG.RING_PULSE_SPEED * 0.5;
     const pulse = 0.6 + 0.4 * (0.5 + 0.5 * Math.sin(t * Math.PI * 2));
 
+    const titleColors = ['#ffcc66', '#ffc44d', '#ffbb33', '#ffaa22'];
+    const titleTier = lifetime ? lifetime.getTitleTier() : 0;
+
     ctx.save();
     ctx.globalAlpha = pulse;
-    ctx.fillStyle = CONFIG.RING_COLOR;
+    ctx.fillStyle = titleColors[titleTier];
     ctx.font = `bold ${Math.round(48 * scale)}px monospace`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -141,6 +238,33 @@ export class UI {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(`best: ${personalBest.toLocaleString()}`, gameWidth / 2, gameHeight / 2 + 60 * scale);
+      ctx.restore();
+    }
+
+    // Lifetime stat rotator
+    if (lifetime) {
+      const stats = lifetime.getDisplayStats();
+      if (stats.length > 0) {
+        const idx = this.menuStatIndex % stats.length;
+        ctx.save();
+        ctx.globalAlpha = 0.15 * this.menuStatFade;
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `${Math.round(11 * scale)}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(stats[idx], gameWidth / 2, gameHeight / 2 + 85 * scale);
+        ctx.restore();
+      }
+    }
+
+    // Menu dust
+    for (const d of this.menuDust) {
+      ctx.save();
+      ctx.globalAlpha = d.alpha;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(d.x * gameWidth, d.y * gameHeight, d.size * scale, 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
     }
 
@@ -359,6 +483,33 @@ export class UI {
     ctx.restore();
   }
 
+  renderRoundSweep(ctx, gameWidth, gameHeight) {
+    if (!this.roundSweep) return;
+    const progress = this.roundSweep.timer / CONFIG.ROUND_SWEEP_DURATION;
+    const y = progress * gameHeight;
+    const alpha = CONFIG.ROUND_SWEEP_OPACITY * (1 - progress);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(gameWidth, y);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  renderStreakFlash(ctx, gameWidth, gameHeight) {
+    if (!this.streakFlash) return;
+    const progress = this.streakFlash.timer / this.streakFlash.duration;
+    const alpha = 0.3 * (1 - progress);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = this.streakFlash.tint;
+    ctx.fillRect(0, 0, gameWidth, gameHeight);
+    ctx.restore();
+  }
+
   renderPauseOverlay(ctx, gameWidth, gameHeight, scale) {
     ctx.save();
     ctx.globalAlpha = 0.5;
@@ -379,7 +530,7 @@ export class UI {
     ctx.restore();
   }
 
-  renderRunEnd(ctx, gameWidth, gameHeight, scale, scoreManager, timer) {
+  renderRunEnd(ctx, gameWidth, gameHeight, scale, scoreManager, timer, lifetime) {
     const p1End = CONFIG.RUN_END_PAUSE;
     const p2End = p1End + CONFIG.RUN_END_TRAIL_HOLD;
     const p3End = p2End + CONFIG.RUN_END_SCORE_FADE;
@@ -420,6 +571,31 @@ export class UI {
         ctx.fillStyle = '#ffffff';
         ctx.font = `${Math.round(13 * scale)}px monospace`;
         ctx.fillText(`best: ${scoreManager.personalBest.toLocaleString()}`, gameWidth / 2, gameHeight * 0.35 + 90 * scale);
+      }
+
+      // Forward hook — give player a reason to retry
+      const bestRound = lifetime ? lifetime.stats.bestRound : 0;
+      if (bestRound > 0 && scoreManager.round < bestRound) {
+        const diff = bestRound - scoreManager.round;
+        ctx.globalAlpha = fadeProgress * 0.2;
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `${Math.round(11 * scale)}px monospace`;
+        ctx.fillText(`${diff} round${diff > 1 ? 's' : ''} from your best`, gameWidth / 2, gameHeight * 0.35 + 110 * scale);
+      }
+
+      // Context-sensitive lifetime stat
+      if (lifetime && lifetime.stats.totalRuns > 0) {
+        let lifetimeLine = `${lifetime.stats.totalRings} rings threaded`;
+        // Show most relevant stat
+        if (scoreManager.longestStreak >= 3 && lifetime.stats.bestStreak > 0) {
+          lifetimeLine = `best streak ever: ${lifetime.stats.bestStreak}`;
+        } else if (scoreManager.round >= 3 && lifetime.stats.bestRound > 0) {
+          lifetimeLine = `best round ever: ${lifetime.stats.bestRound}`;
+        }
+        ctx.globalAlpha = fadeProgress * 0.15;
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `${Math.round(11 * scale)}px monospace`;
+        ctx.fillText(lifetimeLine, gameWidth / 2, gameHeight * 0.35 + 130 * scale);
       }
 
       ctx.restore();
