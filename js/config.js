@@ -87,6 +87,10 @@ export const CONFIG = {
   REPLAY_SPEED_NORMAL: 1,
   REPLAY_SPEED_FAST: 2,
 
+  // Supabase (leave empty to disable leaderboard backend)
+  SUPABASE_URL: '',
+  SUPABASE_ANON_KEY: '',
+
   // Leaderboard
   GALLERY_FETCH_COUNT: 50,
   GALLERY_COLUMNS: 3,

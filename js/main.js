@@ -6,6 +6,8 @@ import { InputManager } from './input.js';
 import { UI } from './ui.js';
 import { RingManager } from './ring.js';
 import { ScoreManager } from './score.js';
+import { AudioManager, vibrate } from './audio.js';
+import { Leaderboard } from './leaderboard.js';
 
 const State = {
   MENU: 'MENU',
@@ -25,6 +27,8 @@ class Game {
     this.input = new InputManager(this.renderer.canvas);
     this.ringManager = new RingManager();
     this.scoreManager = new ScoreManager();
+    this.audio = new AudioManager();
+    this.leaderboard = new Leaderboard();
 
     this.state = State.MENU;
     this.ball = null;
@@ -39,10 +43,10 @@ class Game {
     // RUN_OVER
     this.runEndTimer = 0;
     this.runEndInputReady = false;
+    this.runDuration = 0;
 
     this.input.onTap = (x, y) => this.handleTap(x, y);
 
-    // Pause when hidden, resume when visible. Do not end run.
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
         this.paused = true;
@@ -56,23 +60,32 @@ class Game {
   }
 
   handleTap(x, y) {
+    this.audio.init();
+
     switch (this.state) {
       case State.MENU:
-        this.startNewRun();
+        if (this.ui.isLeaderboardIconTap(x, y, this.renderer)) {
+          this.state = State.LEADERBOARD;
+          this.leaderboard.onClose = () => { this.state = State.MENU; };
+          this.leaderboard.show();
+        } else {
+          this.startNewRun();
+        }
         break;
 
       case State.DROPPING:
       case State.RING_HIT:
         if (!this.isInDeadZone(y)) {
           this.surfaces.place(x, y, this.renderer.scale);
+          this.audio.playPlace();
+          vibrate(CONFIG.PLACE_VIBRATE);
         }
         break;
 
       case State.RUN_OVER:
         if (this.runEndInputReady) {
           if (this.isSaveTap(x, y)) {
-            // Phase 4: save flow. For now, restart.
-            this.startNewRun();
+            this.handleSaveTap();
           } else {
             this.startNewRun();
           }
@@ -94,6 +107,23 @@ class Game {
     const hitH = 40 * scale;
     return x > saveRight - hitW && x < saveRight + 10 * scale &&
            y > saveY - hitH / 2 && y < saveY + hitH / 2;
+  }
+
+  handleSaveTap() {
+    const runData = {
+      score: this.scoreManager.score,
+      rounds: this.scoreManager.round,
+      longestStreak: this.scoreManager.longestStreak,
+      duration: this.runDuration,
+      trail: this.ball ? this.ball.trail : [],
+      gameWidth: this.renderer.gameWidth,
+      gameHeight: this.renderer.gameHeight,
+    };
+
+    this.leaderboard.onSaveComplete = () => {
+      this.startNewRun();
+    };
+    this.leaderboard.startSaveFlow(runData);
   }
 
   startNewRun() {
@@ -125,10 +155,18 @@ class Game {
     this.state = State.DROPPING;
   }
 
-  endRun() {
+  endRun(reason = 'floor') {
     this.state = State.RUN_OVER;
     this.runEndTimer = 0;
     this.runEndInputReady = false;
+    this.runDuration = this.gameTime;
+
+    if (reason === 'ring_kill') {
+      this.audio.playRingKill();
+    } else {
+      this.audio.playEnd();
+    }
+    vibrate(CONFIG.END_VIBRATE);
 
     if (this.ball) {
       this.ball.alive = false;
@@ -143,13 +181,13 @@ class Game {
     const { ring, ringIndex } = result;
     this.ringManager.onRingSuccess(ringIndex, this.ball);
     this.ball.brightenTrail();
+    this.audio.playRingChime();
+    vibrate(CONFIG.RING_VIBRATE);
 
     if (this.ringManager.isDualRound) {
       if (ring.isRingA) {
-        // Ring A threaded — ball continues, bounce count resets
         this.scoreManager.onDualRingASuccess();
       } else {
-        // Ring B threaded — round complete
         this.scoreManager.onDualRingBSuccess();
         this.enterRingHit();
       }
@@ -161,7 +199,7 @@ class Game {
 
   handleRingArc(result) {
     result.ring.startShatter(result.collisionX, result.collisionY);
-    this.endRun();
+    this.endRun('ring_kill');
   }
 
   enterRingHit() {
@@ -172,6 +210,7 @@ class Game {
   updatePhysics(dt) {
     this.scoreManager.update(dt);
     this.ringManager.update(dt);
+    this.renderer.updateShake(dt);
 
     switch (this.state) {
       case State.MENU:
@@ -184,16 +223,18 @@ class Game {
         this.ball.update(dt);
         this.ball.checkWalls(this.renderer.gameWidth);
 
-        // Surface collision → increment bounce count
         if (this.surfaces.checkCollision(this.ball)) {
           this.scoreManager.onBounce();
+          const speed = Math.sqrt(this.ball.vx * this.ball.vx + this.ball.vy * this.ball.vy) / this.ball.scale;
+          this.audio.playBounce(speed);
+          vibrate(CONFIG.BOUNCE_VIBRATE);
+          this.renderer.shake();
         }
 
         this.ball.addTrailPoint(this.gameTime);
         this.ball.updateTrail(this.gameTime);
         this.surfaces.update(dt);
 
-        // Ring collision
         const ringResult = this.ringManager.checkCollision(this.ball);
         if (ringResult) {
           if (ringResult.type === 'gap') {
@@ -204,14 +245,12 @@ class Game {
           break;
         }
 
-        // Floor exit → run over
         if (this.ball.checkFloor(this.renderer.gameHeight)) {
-          this.endRun();
+          this.endRun('floor');
         }
 
-        // MAX_RUN_DURATION safety valve
         if (this.gameTime >= CONFIG.MAX_RUN_DURATION) {
-          this.endRun();
+          this.endRun('floor');
         }
         break;
 
@@ -219,7 +258,6 @@ class Game {
         this.ringHitTimer += dt;
         this.surfaces.update(dt);
 
-        // Ball fades during pause
         if (this.ball) {
           this.ball.opacity = Math.max(0, 1 - this.ringHitTimer / CONFIG.RING_HIT_PAUSE);
           this.ball.updateTrail(this.gameTime);
@@ -234,14 +272,12 @@ class Game {
         this.runEndTimer += dt;
         this.surfaces.update(dt);
 
-        // Ball fades during 0.5s pause
         if (this.ball && this.runEndTimer < CONFIG.RUN_END_PAUSE) {
           this.ball.opacity = Math.max(0, 1 - this.runEndTimer / CONFIG.RUN_END_PAUSE);
         } else if (this.ball) {
           this.ball.opacity = 0;
         }
 
-        // Input unlocked after full 7.5s sequence
         const totalLock = CONFIG.RUN_END_PAUSE + CONFIG.RUN_END_TRAIL_HOLD +
           CONFIG.RUN_END_SCORE_FADE + CONFIG.RUN_END_PROMPT_DELAY;
         if (!this.runEndInputReady && this.runEndTimer >= totalLock) {
@@ -254,29 +290,30 @@ class Game {
   render() {
     const { ctx, gameWidth, gameHeight, scale } = this.renderer;
 
+    // Apply screen shake
+    ctx.save();
+    ctx.translate(this.renderer.shakeX, this.renderer.shakeY);
+
     this.renderer.clear();
 
-    if (this.state === State.MENU) {
+    if (this.state === State.MENU || this.state === State.LEADERBOARD) {
       this.ui.renderMenu(ctx, gameWidth, gameHeight, scale, this.scoreManager.personalBest);
+      ctx.restore();
       return;
     }
 
     const isRunOver = this.state === State.RUN_OVER;
     const inTrailHold = isRunOver && this.runEndTimer >= CONFIG.RUN_END_PAUSE;
 
-    // Death line (not during clean trail hold)
     if (!inTrailHold) {
       this.renderer.drawDeathLine();
     }
 
-    // Trail (always visible)
     if (this.ball) {
       this.ball.renderTrail(ctx, this.gameTime);
     }
 
-    // Rings
     if (isRunOver) {
-      // During run-end Phase 1: show shatter only
       if (!inTrailHold) {
         this.ringManager.renderShatterOnly(ctx);
       }
@@ -284,28 +321,25 @@ class Game {
       this.ringManager.renderRings(ctx);
     }
 
-    // Surfaces
     if (!inTrailHold) {
       this.surfaces.render(ctx);
     }
 
-    // Ball
     if (this.ball && this.ball.opacity > 0 && !inTrailHold) {
       this.ball.render(ctx);
     }
 
-    // Gold flash overlay
     this.ringManager.renderFlash(ctx, gameWidth, gameHeight);
 
-    // Score during gameplay
     if (this.state === State.DROPPING || this.state === State.RING_HIT) {
       this.ui.renderScore(ctx, gameWidth, gameHeight, scale, this.scoreManager);
     }
 
-    // Run-end overlay
     if (isRunOver) {
       this.ui.renderRunEnd(ctx, gameWidth, gameHeight, scale, this.scoreManager, this.runEndTimer);
     }
+
+    ctx.restore();
   }
 
   loop(timestamp) {
@@ -323,7 +357,6 @@ class Game {
     let delta = (timestamp - this.lastTimestamp) / 1000;
     this.lastTimestamp = timestamp;
 
-    // Cap delta at 3 × PHYSICS_STEP to prevent spiral of death
     delta = Math.min(delta, 3 * PHYSICS_STEP);
     this.accumulated += delta;
 

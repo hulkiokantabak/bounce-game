@@ -8,6 +8,11 @@ export class Renderer {
     this.gameHeight = 0;
     this.scale = 1;
 
+    // Screen shake
+    this.shakeX = 0;
+    this.shakeY = 0;
+    this.shakeTimer = 0;
+
     this.resize();
     window.addEventListener('resize', () => this.resize());
   }
@@ -37,6 +42,22 @@ export class Renderer {
     this.canvas.style.height = gh + 'px';
 
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  shake() {
+    this.shakeTimer = CONFIG.SCREEN_SHAKE_DURATION / 1000;
+  }
+
+  updateShake(dt) {
+    if (this.shakeTimer > 0) {
+      this.shakeTimer = Math.max(0, this.shakeTimer - dt);
+      const intensity = this.shakeTimer / (CONFIG.SCREEN_SHAKE_DURATION / 1000);
+      this.shakeX = (Math.random() * 2 - 1) * CONFIG.SCREEN_SHAKE_PX * this.scale * intensity;
+      this.shakeY = (Math.random() * 2 - 1) * CONFIG.SCREEN_SHAKE_PX * this.scale * intensity;
+    } else {
+      this.shakeX = 0;
+      this.shakeY = 0;
+    }
   }
 
   clear() {

@@ -22,3 +22,191 @@ canvas {
   -webkit-user-select: none;
   user-select: none;
 }
+
+/* --- Overlays --- */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  background: rgba(10, 10, 15, 0.95);
+  color: #fff;
+  font-family: monospace;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.overlay.hidden {
+  display: none;
+}
+
+/* --- Gallery --- */
+
+.gallery-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: rgba(10, 10, 15, 0.98);
+  padding: 16px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gallery-close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 28px;
+  cursor: pointer;
+  opacity: 0.5;
+  line-height: 1;
+}
+
+.gallery-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gallery-sorts,
+.gallery-time-filters {
+  display: flex;
+  gap: 6px;
+}
+
+.gallery-sorts button,
+.gallery-time-filters button {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.5);
+  font-family: monospace;
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.gallery-sorts button.active,
+.gallery-time-filters button.active {
+  background: rgba(255, 204, 102, 0.15);
+  border-color: rgba(255, 204, 102, 0.4);
+  color: #ffcc66;
+}
+
+/* --- Gallery grid --- */
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 12px 16px 24px;
+}
+
+.gallery-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.gallery-thumb {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 4px;
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+
+.gallery-thumb-empty {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.cell-score {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.cell-name {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.gallery-empty,
+.gallery-loading {
+  text-align: center;
+  padding: 60px 20px;
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 14px;
+}
+
+/* --- Name input overlay --- */
+
+#name-overlay {
+  justify-content: center;
+  align-items: center;
+  background: rgba(10, 10, 15, 0.9);
+}
+
+.name-form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: min(280px, 80vw);
+}
+
+.name-form input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #fff;
+  font-family: monospace;
+  font-size: 16px;
+  padding: 10px 14px;
+  text-align: center;
+  outline: none;
+}
+
+.name-form input:focus {
+  border-color: rgba(255, 204, 102, 0.5);
+}
+
+.name-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.name-save,
+.name-cancel {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.7);
+  font-family: monospace;
+  font-size: 14px;
+  padding: 8px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.name-save {
+  background: rgba(255, 204, 102, 0.15);
+  border-color: rgba(255, 204, 102, 0.4);
+  color: #ffcc66;
+}

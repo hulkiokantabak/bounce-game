@@ -34,6 +34,45 @@ export class UI {
       ctx.fillText(`best: ${personalBest.toLocaleString()}`, gameWidth / 2, gameHeight / 2 + 40 * scale);
       ctx.restore();
     }
+
+    // Leaderboard icon — bottom-right, trail glyph
+    this.renderLeaderboardIcon(ctx, gameWidth, gameHeight, scale);
+  }
+
+  renderLeaderboardIcon(ctx, gameWidth, gameHeight, scale) {
+    const x = gameWidth - 30 * scale;
+    const y = gameHeight - 30 * scale;
+    const s = 14 * scale;
+
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = CONFIG.BALL_COLOR;
+    ctx.lineWidth = 2 * scale;
+    ctx.lineCap = 'round';
+
+    // Small trail glyph
+    ctx.beginPath();
+    ctx.moveTo(x - s * 0.6, y + s * 0.3);
+    ctx.quadraticCurveTo(x - s * 0.1, y - s * 0.5, x + s * 0.2, y);
+    ctx.quadraticCurveTo(x + s * 0.5, y + s * 0.4, x + s * 0.7, y - s * 0.15);
+    ctx.stroke();
+
+    // Dot at end
+    ctx.fillStyle = CONFIG.BALL_COLOR;
+    ctx.beginPath();
+    ctx.arc(x + s * 0.7, y - s * 0.15, 2 * scale, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  isLeaderboardIconTap(x, y, renderer) {
+    const { gameWidth, gameHeight, scale } = renderer;
+    const iconX = gameWidth - 30 * scale;
+    const iconY = gameHeight - 30 * scale;
+    const hitSize = 35 * scale;
+    return x > iconX - hitSize && x < iconX + hitSize &&
+           y > iconY - hitSize && y < iconY + hitSize;
   }
 
   renderScore(ctx, gameWidth, gameHeight, scale, scoreManager) {
@@ -52,11 +91,11 @@ export class UI {
     ctx.textBaseline = 'top';
     ctx.fillText(scoreManager.score.toLocaleString(), margin, margin);
 
-    // Streak display — fade in at threshold (3+)
+    // Streak at threshold 3+
     if (scoreManager.streak >= CONFIG.STREAK_DISPLAY_THRESHOLD) {
       ctx.globalAlpha = 0.3;
       ctx.font = `${Math.round(13 * scale)}px monospace`;
-      ctx.fillText(`×${scoreManager.streak} streak`, margin, margin + size + 4 * scale);
+      ctx.fillText(`\u00d7${scoreManager.streak} streak`, margin, margin + size + 4 * scale);
     }
 
     ctx.restore();
@@ -68,7 +107,7 @@ export class UI {
     const p3End = p2End + CONFIG.RUN_END_SCORE_FADE;
     const p4End = p3End + CONFIG.RUN_END_PROMPT_DELAY;
 
-    // Phase 3: score fade-in (after trail hold)
+    // Phase 3: score fade-in
     if (timer >= p2End) {
       const fadeProgress = Math.min((timer - p2End) / CONFIG.RUN_END_SCORE_FADE, 1);
 
@@ -87,7 +126,7 @@ export class UI {
       ctx.font = `${Math.round(16 * scale)}px monospace`;
       ctx.fillText(`${scoreManager.round} rounds`, gameWidth / 2, gameHeight * 0.40 + 40 * scale);
 
-      // Longest streak (if notable)
+      // Longest streak
       if (scoreManager.longestStreak >= CONFIG.STREAK_DISPLAY_THRESHOLD) {
         ctx.fillText(`${scoreManager.longestStreak} streak`, gameWidth / 2, gameHeight * 0.40 + 65 * scale);
       }
@@ -95,11 +134,10 @@ export class UI {
       ctx.restore();
     }
 
-    // After full 7.5s: Save text + tap to restart
+    // After 7.5s: Save + restart
     if (timer >= p4End) {
       ctx.save();
 
-      // "tap to restart" — center
       ctx.globalAlpha = 0.3;
       ctx.fillStyle = '#ffffff';
       ctx.font = `${Math.round(14 * scale)}px monospace`;
@@ -107,7 +145,7 @@ export class UI {
       ctx.textBaseline = 'middle';
       ctx.fillText('tap to restart', gameWidth / 2, gameHeight * 0.85);
 
-      // "Save" — bottom-right, 30% monospace, gold if personal best
+      // Save — bottom-right, gold if personal best
       ctx.textAlign = 'right';
       ctx.fillStyle = scoreManager.isNewPersonalBest ? CONFIG.RING_COLOR : '#ffffff';
       ctx.fillText('Save', gameWidth - 20 * scale, gameHeight * 0.92);
