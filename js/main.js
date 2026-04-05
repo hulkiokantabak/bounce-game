@@ -256,6 +256,11 @@ class Game {
     this.leaderboard.onSaveComplete = () => {
       this.startNewRun();
     };
+    // Show brief save hint for quick saves (name already set)
+    const playerName = this.leaderboard.getPlayerName();
+    if (playerName !== 'Anonymous' && localStorage.getItem('bounce_player_name')) {
+      this.ui.showHint(`saving as ${playerName}...`, this.renderer.gameWidth / 2, this.renderer.gameHeight * 0.7);
+    }
     this.leaderboard.startSaveFlow(runData);
   }
 

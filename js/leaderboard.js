@@ -292,10 +292,45 @@ export class Leaderboard {
 
   startSaveFlow(runData) {
     this.pendingRunData = runData;
+
+    // If player already has a name set (not first time), skip the name prompt
+    const existingName = this.getPlayerName();
+    if (existingName !== 'Anonymous' && localStorage.getItem('bounce_player_name')) {
+      // Quick save — no prompt needed
+      this.quickSave(existingName);
+      return;
+    }
+
+    // First time — ask for name
     const input = this.nameOverlay.querySelector('#player-name');
-    input.value = this.getPlayerName();
+    input.value = existingName;
     this.nameOverlay.classList.remove('hidden');
     setTimeout(() => input.focus(), 150);
+  }
+
+  async quickSave(name) {
+    if (this.saving) return;
+    this.saving = true;
+
+    if (this.pendingRunData && this.isConfigured && this.canSubmit()) {
+      const data = this.pendingRunData;
+      const thumbnail = this.generateThumbnail(data.trail, data.gameWidth, data.gameHeight);
+
+      await this.submitRun({
+        player_id: this.playerId,
+        player_name: name,
+        score: data.score,
+        rounds: data.rounds,
+        longest_streak: data.longestStreak,
+        duration: Math.round(data.duration * 100) / 100,
+        trail_image: thumbnail,
+        trail_data: data.trailData || { ball: [], surfaces: [], rings: [] },
+      });
+    }
+
+    this.pendingRunData = null;
+    this.saving = false;
+    if (this.onSaveComplete) this.onSaveComplete();
   }
 
   hideNameInput() {

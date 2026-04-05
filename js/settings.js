@@ -73,6 +73,77 @@ export class Settings {
         this._save();
       });
     }
+
+    // Player name input
+    const nameInput = this.overlay.querySelector('#settings-player-name');
+    if (nameInput) {
+      // Load existing name
+      try {
+        const stored = localStorage.getItem('bounce_player_name');
+        if (stored) nameInput.value = stored;
+      } catch { /* ignore */ }
+
+      // Save on blur or Enter
+      const saveName = () => {
+        const name = nameInput.value.replace(/[\x00-\x1f\x7f]/g, '').trim().substring(0, 20);
+        if (name) {
+          try { localStorage.setItem('bounce_player_name', name); } catch {}
+        }
+      };
+      nameInput.addEventListener('blur', saveName);
+      nameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { saveName(); nameInput.blur(); }
+      });
+    }
+
+    // Try-it buttons
+    const tryItBtns = this.overlay.querySelectorAll('.settings-tryit');
+    const outputEl = this.overlay.querySelector('#tryit-output');
+    for (const btn of tryItBtns) {
+      btn.addEventListener('click', () => {
+        const action = btn.dataset.action;
+        this._handleTryIt(action, outputEl);
+      });
+    }
+  }
+
+  _handleTryIt(action, outputEl) {
+    const agent = window.BounceAgent;
+    if (!agent) {
+      this._showOutput(outputEl, 'Game not loaded yet. Close settings and try again.');
+      return;
+    }
+
+    switch (action) {
+      case 'startRun':
+        this.hide();
+        setTimeout(() => {
+          agent.startRun();
+        }, 100);
+        break;
+
+      case 'aiDemo':
+        this.values.aiDemo = true;
+        this._save();
+        // Update the toggle button if visible
+        const aiBtn = this.overlay.querySelector('[data-setting="aiDemo"]');
+        if (aiBtn) this._updateToggleButton(aiBtn, 'aiDemo');
+        this.hide();
+        break;
+
+      case 'showState': {
+        const summary = agent.getSummary();
+        const text = JSON.stringify(summary, null, 2);
+        this._showOutput(outputEl, text);
+        break;
+      }
+    }
+  }
+
+  _showOutput(el, text) {
+    if (!el) return;
+    el.textContent = text;
+    el.classList.remove('hidden');
   }
 
   _updateToggleButton(btn, key) {
@@ -84,6 +155,20 @@ export class Settings {
   show(onClose) {
     if (!this.overlay) return;
     this._onClose = onClose || null;
+
+    // Refresh name input
+    const nameInput = this.overlay.querySelector('#settings-player-name');
+    if (nameInput) {
+      try {
+        const stored = localStorage.getItem('bounce_player_name');
+        if (stored) nameInput.value = stored;
+      } catch {}
+    }
+
+    // Hide try-it output
+    const outputEl = this.overlay.querySelector('#tryit-output');
+    if (outputEl) outputEl.classList.add('hidden');
+
     this.overlay.classList.remove('hidden');
     this.isOpen = true;
   }

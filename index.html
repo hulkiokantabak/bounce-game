@@ -28,6 +28,16 @@
 
       <div class="settings-section">
         <div class="settings-row">
+          <span class="settings-label">Player Name</span>
+          <input type="text" class="settings-name-input" id="settings-player-name" maxlength="20" placeholder="Anonymous" autocomplete="off">
+        </div>
+        <p class="settings-desc">Your name on the leaderboard.</p>
+      </div>
+
+      <div class="settings-divider"></div>
+
+      <div class="settings-section">
+        <div class="settings-row">
           <span class="settings-label">Sound</span>
           <button class="settings-toggle" data-setting="sound">ON</button>
         </div>
@@ -51,16 +61,23 @@
       <div class="settings-divider"></div>
 
       <div class="settings-section">
+        <div class="settings-section-title">Try the AI</div>
+        <p class="settings-desc">See what the game engine can do. Close settings first, then try these:</p>
+        <div class="settings-tryit-list">
+          <button class="settings-tryit" data-action="startRun">Start a new run</button>
+          <button class="settings-tryit" data-action="aiDemo">Let AI play a round</button>
+          <button class="settings-tryit" data-action="showState">Show game state</button>
+        </div>
+        <div id="tryit-output" class="settings-tryit-output hidden"></div>
+      </div>
+
+      <div class="settings-divider"></div>
+
+      <div class="settings-section">
         <div class="settings-section-title">Developer API</div>
         <p class="settings-desc">
-          Control the game programmatically via the browser console:<br><br>
-          <code>window.BounceAgent.getState()</code><br>
-          <code>window.BounceAgent.tap(x, y)</code><br>
-          <code>window.BounceAgent.startRun()</code><br>
-          <code>window.BounceAgent.getSummary()</code><br><br>
-          Connect an AI provider:<br>
-          <code>window.BOUNCE_AI = { onGameState(s) { ... } }</code><br><br>
-          <span class="settings-link-hint">Full docs: 17+ methods for AI agents, bots, and external tools.</span>
+          For developers and AI builders — 17+ methods available via <code>window.BounceAgent</code> in the browser console.
+          Connect your own AI with <code>window.BOUNCE_AI</code>.
         </p>
       </div>
     </div>
