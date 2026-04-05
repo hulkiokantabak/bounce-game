@@ -109,7 +109,9 @@ class Game {
 
   _playAudio(method, ...args) {
     if (window.BounceAgent && window.BounceAgent.isSilent) return;
-    this.audio[method](...args);
+    if (typeof this.audio[method] === 'function') {
+      this.audio[method](...args);
+    }
   }
 
   handleTap(x, y) {
@@ -310,12 +312,18 @@ class Game {
     this.runEndInputReady = false;
     this.runDuration = this.gameTime;
 
+    // Stop environmental sounds
+    this._playAudio('stopWindSound');
+    this._playAudio('stopGravityHum');
+    this._gravityHumActive = false;
+
     if (reason === 'ring_kill') {
       this._playAudio('playRingKill');
+      this._vibrate([30, 50, 30]); // distinctive ring-kill haptic
     } else {
       this._playAudio('playEnd');
+      this._vibrate(CONFIG.END_VIBRATE);
     }
-    this._vibrate(CONFIG.END_VIBRATE);
 
     if (this.ball) {
       this.ball.alive = false;
@@ -409,10 +417,11 @@ class Game {
       this.ui.addScorePop(ring.cx, ring.cy, scoreGain, this.scoreManager.streak > 1, isClean, showMult ? mult : 0);
     }
 
-    // CLEAN success effect — brief golden pulse
+    // CLEAN success effect — brief golden pulse + sparkle chime
     if (isClean) {
       this.renderer.shake(0.5);
       this.ui.triggerCleanFlash();
+      this._playAudio('playCleanChime');
     }
 
     // Near-miss audio shimmer
@@ -433,9 +442,13 @@ class Game {
       this.ball.setTrailColorForStreak(this.scoreManager.streak);
     }
 
-    // Streak milestone visual
-    if (this.scoreManager.streak === 5 || this.scoreManager.streak === 10) {
+    // Streak milestone visual + escalating haptic
+    if (this.scoreManager.streak === 5) {
       this.ui.triggerStreakFlash(this.scoreManager.streak);
+      this._vibrate([20, 30, 20, 30, 20]);
+    } else if (this.scoreManager.streak >= 10) {
+      this.ui.triggerStreakFlash(this.scoreManager.streak);
+      this._vibrate([15, 20, 15, 20, 15, 20, 15]);
     }
 
     // Score explanation on very first ring success
@@ -529,7 +542,8 @@ class Game {
 
       this.constellations = [];
       for (const entry of data) {
-        if (entry.trail_image && typeof entry.trail_image === 'string' && entry.trail_image.startsWith('data:image/')) {
+        if (entry.trail_image && typeof entry.trail_image === 'string' &&
+            (entry.trail_image.startsWith('data:image/png') || entry.trail_image.startsWith('data:image/jpeg'))) {
           const img = new Image();
           img.src = entry.trail_image;
           this.constellations.push({
@@ -583,15 +597,25 @@ class Game {
           // Smooth wind transition
           this.wind += (this.windTarget - this.wind) * dt * 2;
           this.ball.windForce = this.wind;
+          // Wind audio
+          if (Math.abs(this.wind) > 10) {
+            this._playAudio('startWindSound', this.wind);
+          }
         }
 
         // --- Environment: Gravity pulse ---
         if (this.gravityPulse) {
           this.gravityPulseTimer -= dt;
           this.ball.envGravityMult = CONFIG.GRAVITY_PULSE_MULT;
+          if (!this._gravityHumActive) {
+            this._playAudio('startGravityHum');
+            this._gravityHumActive = true;
+          }
           if (this.gravityPulseTimer <= 0) {
             this.gravityPulse = false;
             this.ball.envGravityMult = 1.0;
+            this._playAudio('stopGravityHum');
+            this._gravityHumActive = false;
           }
         }
 
@@ -620,8 +644,15 @@ class Game {
           this.scoreManager.onBounce();
           this.runBounceTotal++;
           const speed = Math.sqrt(this.ball.vx * this.ball.vx + this.ball.vy * this.ball.vy) / this.ball.scale;
-          this._playAudio('playBounce', speed);
-          this._vibrate(isFirstBounce ? 30 : CONFIG.BOUNCE_VIBRATE);
+          const hitSurfaceType = this.surfaces.lastHitType || 'normal';
+          if (hitSurfaceType !== 'normal') {
+            this._playAudio('playTypedBounce', speed, hitSurfaceType);
+          } else {
+            this._playAudio('playBounce', speed);
+          }
+          // Surface-type-specific haptic patterns
+          const hapticPatterns = { spring: [10, 30, 15], ice: [5, 10, 5], sticky: [40], angled_left: [15, 15], angled_right: [15, 15] };
+          this._vibrate(isFirstBounce ? 30 : (hapticPatterns[hitSurfaceType] || CONFIG.BOUNCE_VIBRATE));
           // Speed-scaled shake
           const shakeIntensity = Math.min(speed / 600, 2.0);
           this.renderer.shake(isFirstBounce ? 2.0 : shakeIntensity);
@@ -656,6 +687,12 @@ class Game {
           const bounceData = { x: this.ball.x, y: this.ball.y, vx: this.ball.vx, vy: this.ball.vy, speed, bounceCount: this.scoreManager.bounceCount };
           this.aiHooks.notifyBounce(bounceData);
           if (window.BounceAgent) window.BounceAgent._emit('bounce', bounceData);
+        }
+
+        // Speed whoosh for fast ball
+        const ballSpeed = Math.sqrt(this.ball.vx * this.ball.vx + this.ball.vy * this.ball.vy) / this.ball.scale;
+        if (ballSpeed > 500) {
+          this._playAudio('playSpeedWhoosh', ballSpeed);
         }
 
         this.ball.addTrailPoint(this.gameTime);

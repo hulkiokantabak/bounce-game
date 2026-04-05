@@ -39,6 +39,176 @@ export class AudioManager {
     osc.stop(now + 0.1);
   }
 
+  /** Play a bounce sound tailored to the surface type */
+  playTypedBounce(speed, surfaceType) {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+
+    if (surfaceType === 'spring') {
+      // Spring: bright, rising pitch with longer sustain
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(600, now);
+      osc.frequency.exponentialRampToValueAtTime(1200, now + 0.06);
+      osc.frequency.exponentialRampToValueAtTime(800, now + 0.15);
+      gain.gain.setValueAtTime(0.25, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.18);
+    } else if (surfaceType === 'ice') {
+      // Ice: crystalline high shimmer
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1400, now);
+      osc.frequency.exponentialRampToValueAtTime(2000, now + 0.04);
+      osc.frequency.exponentialRampToValueAtTime(1600, now + 0.1);
+      gain.gain.setValueAtTime(0.12, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.12);
+    } else if (surfaceType === 'sticky') {
+      // Sticky: muffled, short thud
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(180, now);
+      osc.frequency.exponentialRampToValueAtTime(80, now + 0.06);
+      gain.gain.setValueAtTime(0.2, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.06);
+    } else if (surfaceType === 'angled_left' || surfaceType === 'angled_right') {
+      // Angled: swoosh with directional pitch shift
+      const dir = surfaceType === 'angled_left' ? -1 : 1;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sawtooth';
+      const startFreq = 300 + dir * 100;
+      osc.frequency.setValueAtTime(startFreq, now);
+      osc.frequency.exponentialRampToValueAtTime(startFreq + dir * 200, now + 0.08);
+      gain.gain.setValueAtTime(0.08, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.1);
+    } else {
+      // Normal: use standard bounce
+      this.playBounce(speed);
+      return;
+    }
+  }
+
+  /** Subtle low hum during gravity pulse */
+  startGravityHum() {
+    if (!this.ctx || this._gravityHum) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(55, now);
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.04, now + 0.5);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    this._gravityHum = { osc, gain };
+  }
+
+  stopGravityHum() {
+    if (!this._gravityHum) return;
+    const now = this.ctx.currentTime;
+    this._gravityHum.gain.gain.linearRampToValueAtTime(0, now + 0.3);
+    this._gravityHum.osc.stop(now + 0.3);
+    this._gravityHum = null;
+  }
+
+  /** Subtle wind noise using filtered noise */
+  startWindSound(intensity) {
+    if (!this.ctx) return;
+    // Use a quiet oscillator to simulate wind whistle
+    if (this._windOsc) {
+      // Update existing wind intensity
+      const now = this.ctx.currentTime;
+      this._windGain.gain.linearRampToValueAtTime(Math.abs(intensity) * 0.015, now + 0.3);
+      this._windOsc.frequency.linearRampToValueAtTime(100 + Math.abs(intensity) * 2, now + 0.3);
+      return;
+    }
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(100, now);
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(Math.abs(intensity) * 0.015, now + 0.5);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    this._windOsc = osc;
+    this._windGain = gain;
+  }
+
+  stopWindSound() {
+    if (!this._windOsc) return;
+    const now = this.ctx.currentTime;
+    this._windGain.gain.linearRampToValueAtTime(0, now + 0.3);
+    this._windOsc.stop(now + 0.3);
+    this._windOsc = null;
+    this._windGain = null;
+  }
+
+  /** Play clean threading celebration — distinctive sparkle */
+  playCleanChime() {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    // Triple ascending sparkle notes
+    const notes = [880, 1100, 1320];
+    notes.forEach((freq, i) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + i * 0.06);
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.setValueAtTime(0.1, now + i * 0.06);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.06 + 0.12);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now + i * 0.06);
+      osc.stop(now + i * 0.06 + 0.12);
+    });
+  }
+
+  /** Speed whoosh — plays when ball is moving fast */
+  playSpeedWhoosh(speed) {
+    if (!this.ctx) return;
+    if (this._whooshPlaying) return;
+    this._whooshPlaying = true;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    const freq = 60 + speed * 0.1;
+    osc.frequency.setValueAtTime(freq, now);
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.5, now + 0.15);
+    gain.gain.setValueAtTime(0.02, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.15);
+
+    setTimeout(() => { this._whooshPlaying = false; }, 200);
+  }
+
   playWallBounce() {
     if (!this.ctx) return;
     const now = this.ctx.currentTime;

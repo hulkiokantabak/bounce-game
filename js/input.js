@@ -11,7 +11,8 @@ export class InputManager {
   handleTouch(e) {
     e.preventDefault();
     if (!this.onTap) return;
-    const touch = e.touches[0];
+    // Use the most recent touch (last in changedTouches) for better palm rejection on tablets
+    const touch = e.changedTouches[e.changedTouches.length - 1];
     const rect = this.canvas.getBoundingClientRect();
     this.onTap(touch.clientX - rect.left, touch.clientY - rect.top);
   }

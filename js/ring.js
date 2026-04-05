@@ -331,8 +331,10 @@ export class RingManager {
 
     let pos;
     if (round <= 1) {
-      // Round 1: center ring so it's immediately visible
-      pos = { x: gameWidth / 2, y: gameHeight * 0.6 };
+      // Round 1: slightly randomized but within a comfortable zone
+      const r1x = gameWidth * (0.3 + Math.random() * 0.4);
+      const r1y = gameHeight * (0.55 + Math.random() * 0.15);
+      pos = { x: r1x, y: r1y };
     } else {
       pos = this.findPosition(minX, maxX, minY, maxY, ringRadius, this.lastPosition);
     }

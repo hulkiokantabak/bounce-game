@@ -50,6 +50,7 @@ canvas {
   z-index: 2;
   background: rgba(10, 10, 15, 0.98);
   padding: 16px 16px 12px;
+  padding-top: max(16px, env(safe-area-inset-top, 16px));
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -99,58 +100,79 @@ canvas {
   color: #ffcc66;
 }
 
-/* --- Gallery grid --- */
+/* --- Leaderboard list --- */
 
-.gallery-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  padding: 12px 16px 24px;
-}
-
-.gallery-cell {
+.gallery-list {
   display: flex;
   flex-direction: column;
+  gap: 2px;
+  padding: 8px 16px 24px;
+  padding-bottom: max(24px, env(safe-area-inset-bottom, 24px));
+}
+
+.lb-row {
+  display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px;
+  gap: 10px;
+  padding: 8px 10px;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.03);
   cursor: pointer;
   transition: background 0.15s;
 }
 
-.gallery-cell:active {
+.lb-row:active {
   background: rgba(255, 204, 102, 0.1);
 }
 
-.gallery-thumb {
-  width: 100%;
-  aspect-ratio: 1;
+.lb-row-me {
+  background: rgba(255, 204, 102, 0.06);
+  border-left: 2px solid rgba(255, 204, 102, 0.4);
+}
+
+.lb-rank {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.35);
+  min-width: 28px;
+  text-align: right;
+}
+
+.lb-row:nth-child(1) .lb-rank { color: #ffcc66; }
+.lb-row:nth-child(2) .lb-rank { color: #cccccc; }
+.lb-row:nth-child(3) .lb-rank { color: #cc9966; }
+
+.lb-thumb {
+  width: 36px;
+  height: 36px;
   border-radius: 4px;
   object-fit: cover;
   image-rendering: pixelated;
+  flex-shrink: 0;
 }
 
-.gallery-thumb-empty {
-  width: 100%;
-  aspect-ratio: 1;
-  border-radius: 4px;
+.lb-thumb-empty {
   background: rgba(255, 255, 255, 0.04);
 }
 
-.cell-score {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.7);
+.lb-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
 }
 
-.cell-name {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.35);
+.lb-name {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 100%;
+}
+
+.lb-details {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
 }
 
 .gallery-empty,
@@ -167,6 +189,7 @@ canvas {
   justify-content: center;
   align-items: center;
   background: rgba(10, 10, 15, 0.9);
+  padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
 }
 
 .name-form {

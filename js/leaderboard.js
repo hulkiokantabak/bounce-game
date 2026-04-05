@@ -4,7 +4,7 @@ export class Leaderboard {
   constructor() {
     this.entries = [];
     this.currentSort = 'score';
-    this.currentTime = 'all';
+    this.currentTime = 'week';
     this.playerId = this.getOrCreatePlayerId();
     this.lastSubmitTime = 0;
 
@@ -70,21 +70,20 @@ export class Leaderboard {
       <div class="gallery-header">
         <button class="gallery-close">\u00d7</button>
         <div class="gallery-filters">
+          <div class="gallery-time-filters">
+            <button data-time="week" class="active">This Week</button>
+            <button data-time="month">This Month</button>
+            <button data-time="all">All Time</button>
+          </div>
           <div class="gallery-sorts">
             <button data-sort="score" class="active">Score</button>
             <button data-sort="streak">Streak</button>
             <button data-sort="rounds">Rounds</button>
-            <button data-sort="recent">Recent</button>
-          </div>
-          <div class="gallery-time-filters">
-            <button data-time="all" class="active">All</button>
-            <button data-time="week">Week</button>
-            <button data-time="today">Today</button>
           </div>
         </div>
       </div>
-      <div class="gallery-grid"></div>
-      <div class="gallery-empty hidden">No trails yet.</div>
+      <div class="gallery-list"></div>
+      <div class="gallery-empty hidden">No scores yet. Play and save to appear here!</div>
       <div class="gallery-loading hidden">Loading...</div>
     `;
     document.body.appendChild(this.galleryEl);
@@ -174,25 +173,25 @@ export class Leaderboard {
     url.searchParams.set('select', 'id,player_id,player_name,score,rounds,longest_streak,duration,trail_image,created_at');
 
     // Time filter
-    if (this.currentTime === 'today') {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      url.searchParams.set('created_at', `gte.${today.toISOString()}`);
-    } else if (this.currentTime === 'week') {
+    if (this.currentTime === 'week') {
       const week = new Date();
       week.setDate(week.getDate() - 7);
       url.searchParams.set('created_at', `gte.${week.toISOString()}`);
+    } else if (this.currentTime === 'month') {
+      const month = new Date();
+      month.setDate(month.getDate() - 30);
+      url.searchParams.set('created_at', `gte.${month.toISOString()}`);
     }
+    // 'all' = no time filter
 
     // Sort
     const sortMap = {
       score: 'score.desc',
       streak: 'longest_streak.desc',
       rounds: 'rounds.desc',
-      recent: 'created_at.desc',
     };
     url.searchParams.set('order', sortMap[this.currentSort] || 'score.desc');
-    url.searchParams.set('limit', String(CONFIG.GALLERY_FETCH_COUNT));
+    url.searchParams.set('limit', '50');
 
     const res = await fetch(url, {
       headers: {
@@ -208,61 +207,78 @@ export class Leaderboard {
   }
 
   renderGrid() {
-    const grid = this.galleryEl.querySelector('.gallery-grid');
+    const list = this.galleryEl.querySelector('.gallery-list');
     const empty = this.galleryEl.querySelector('.gallery-empty');
     const loading = this.galleryEl.querySelector('.gallery-loading');
 
     loading.classList.add('hidden');
 
     if (this.entries.length === 0) {
-      grid.innerHTML = '';
+      list.innerHTML = '';
       empty.classList.remove('hidden');
       return;
     }
 
     empty.classList.add('hidden');
-    grid.innerHTML = '';
-    for (const entry of this.entries) {
-      const cell = document.createElement('div');
-      cell.className = 'gallery-cell';
+    list.innerHTML = '';
 
+    for (let i = 0; i < this.entries.length; i++) {
+      const entry = this.entries[i];
+      const row = document.createElement('div');
+      row.className = 'lb-row';
+      const isMe = entry.player_id === this.playerId;
+      if (isMe) row.classList.add('lb-row-me');
+
+      const rank = document.createElement('span');
+      rank.className = 'lb-rank';
+      rank.textContent = `#${i + 1}`;
+      row.appendChild(rank);
+
+      // Thumbnail
       if (entry.trail_image && this.isValidImageData(entry.trail_image)) {
         const img = document.createElement('img');
-        img.className = 'gallery-thumb';
+        img.className = 'lb-thumb';
         img.src = entry.trail_image;
         img.alt = '';
-        cell.appendChild(img);
+        row.appendChild(img);
       } else {
         const placeholder = document.createElement('div');
-        placeholder.className = 'gallery-thumb-empty';
-        cell.appendChild(placeholder);
+        placeholder.className = 'lb-thumb lb-thumb-empty';
+        row.appendChild(placeholder);
       }
 
-      const scoreSpan = document.createElement('span');
-      scoreSpan.className = 'cell-score';
-      scoreSpan.textContent = (typeof entry.score === 'number' ? entry.score : 0).toLocaleString();
-      cell.appendChild(scoreSpan);
+      const info = document.createElement('div');
+      info.className = 'lb-info';
 
       const nameSpan = document.createElement('span');
-      nameSpan.className = 'cell-name';
-      nameSpan.textContent = entry.player_name || 'Anonymous';
-      cell.appendChild(nameSpan);
+      nameSpan.className = 'lb-name';
+      nameSpan.textContent = this.sanitizeName(entry.player_name);
+      info.appendChild(nameSpan);
 
-      // Replay tap — store entry id for on-demand fetch
+      const details = document.createElement('span');
+      details.className = 'lb-details';
+      const scoreVal = typeof entry.score === 'number' ? entry.score : 0;
+      const roundsVal = typeof entry.rounds === 'number' ? entry.rounds : 0;
+      const streakVal = typeof entry.longest_streak === 'number' ? entry.longest_streak : 0;
+      details.textContent = `${scoreVal.toLocaleString()} pts · R${roundsVal} · ${streakVal} streak`;
+      info.appendChild(details);
+
+      row.appendChild(info);
+
+      // Replay tap
       if (entry.id) {
-        cell.dataset.entryId = entry.id;
-        cell.style.cursor = 'pointer';
-        cell.addEventListener('click', () => {
+        row.style.cursor = 'pointer';
+        row.addEventListener('click', () => {
           if (this.onReplayRequest) this.onReplayRequest(entry.id);
         });
       }
 
-      grid.appendChild(cell);
+      list.appendChild(row);
     }
   }
 
   showEmpty() {
-    this.galleryEl.querySelector('.gallery-grid').innerHTML = '';
+    this.galleryEl.querySelector('.gallery-list').innerHTML = '';
     this.galleryEl.querySelector('.gallery-loading').classList.add('hidden');
     this.galleryEl.querySelector('.gallery-empty').classList.remove('hidden');
   }
@@ -279,7 +295,7 @@ export class Leaderboard {
     const input = this.nameOverlay.querySelector('#player-name');
     input.value = this.getPlayerName();
     this.nameOverlay.classList.remove('hidden');
-    setTimeout(() => input.focus(), 50);
+    setTimeout(() => input.focus(), 150);
   }
 
   hideNameInput() {
@@ -326,8 +342,11 @@ export class Leaderboard {
   async submitRun(data) {
     if (!this.isConfigured) return;
 
+    // Set submit time before fetch to prevent concurrent submissions
+    this.lastSubmitTime = Date.now();
+
     try {
-      const res = await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/bounce_runs`, {
+      await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/bounce_runs`, {
         method: 'POST',
         headers: {
           'apikey': CONFIG.SUPABASE_ANON_KEY,
@@ -337,10 +356,6 @@ export class Leaderboard {
         },
         body: JSON.stringify(data),
       });
-
-      if (res.ok) {
-        this.lastSubmitTime = Date.now();
-      }
     } catch {
       // Silent fail — save flow completes regardless
     }
@@ -385,8 +400,11 @@ export class Leaderboard {
 
   isValidImageData(url) {
     if (typeof url !== 'string') return false;
-    // Only allow data:image/ URIs (generated thumbnails) and https URLs
-    if (url.startsWith('data:image/')) return true;
+    // Only allow safe raster data URIs (block SVG which can contain scripts)
+    if (url.startsWith('data:image/png') || url.startsWith('data:image/jpeg') ||
+        url.startsWith('data:image/webp') || url.startsWith('data:image/gif')) return true;
+    // Block data:image/svg+xml and all other data URIs
+    if (url.startsWith('data:')) return false;
     try {
       const parsed = new URL(url);
       return parsed.protocol === 'https:';

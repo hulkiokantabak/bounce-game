@@ -175,6 +175,10 @@ export class Ball {
     this.trailCounter++;
     if (this.trailCounter % CONFIG.REPLAY_SAMPLE_RATE !== 0) return;
     this.trail.push({ x: this.x, y: this.y, t: time });
+    // Cap trail array to prevent memory exhaustion on very long runs
+    if (this.trail.length > 3000) {
+      this.trail = this.trail.slice(-2000);
+    }
   }
 
   updateTrail(currentTime) {
