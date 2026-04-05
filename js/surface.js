@@ -277,8 +277,8 @@ export class SurfaceManager {
 
       // Detect collision: ball crossed surface top this frame OR ball is overlapping surface
       const crossed = prevBallBottom <= surfaceTop && ballBottom >= surfaceTop;
-      const overlapping = ballBottom >= surfaceTop && ballBottom <= surfaceBottom + ballRadius &&
-                          ball.y - ballRadius < surfaceBottom;
+      const overlapping = ballBottom > surfaceTop && ball.y < surfaceBottom + ballRadius;
+      const isOverlapBounce = !crossed && overlapping;
 
       if (crossed || overlapping) {
         // Horizontal overlap (ball circle vs surface rect)
@@ -331,13 +331,15 @@ export class SurfaceManager {
           }
 
           // ALWAYS boost to MIN_SPEED — prevents ball from sticking on surface
+          // Overlap bounces get extra upward kick to escape the surface
           const minSpeed = CONFIG.MIN_SPEED * ball.scale;
-          if (Math.abs(ball.vy) < minSpeed) {
-            ball.vy = -minSpeed;
+          const escapeSpeed = isOverlapBounce ? minSpeed * 1.5 : minSpeed;
+          if (Math.abs(ball.vy) < escapeSpeed) {
+            ball.vy = -escapeSpeed;
           }
 
-          // Immunity prevents immediate re-collision
-          ball.bounceImmunity = 0.08;
+          // Longer immunity for overlap bounces to ensure ball escapes
+          ball.bounceImmunity = isOverlapBounce ? 0.15 : 0.08;
 
           surface.onHit(impactX);
           this.lastHitType = type;
