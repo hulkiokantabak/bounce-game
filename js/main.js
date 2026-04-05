@@ -93,6 +93,7 @@ class Game {
           this.recorder.recordSurface(x, y, this.gameTime);
           this.audio.playPlace();
           vibrate(CONFIG.PLACE_VIBRATE);
+          this.ui.addSurfaceFlash(x, y);
         }
         break;
 
@@ -246,6 +247,9 @@ class Game {
     // Record ring success
     this.recorder.recordRingHit(ringIndex, this.gameTime, true);
 
+    // Capture bounce count before score functions reset it
+    const bouncesBeforeRing = this.scoreManager.bounceCount;
+
     let scoreGain = 0;
     if (this.ringManager.isDualRound) {
       if (ring.isRingA) {
@@ -259,9 +263,18 @@ class Game {
       this.enterRingHit();
     }
 
-    // Score pop at ring position
+    // "CLEAN!" if 0 bounces before threading
+    const isClean = bouncesBeforeRing === 0;
     if (scoreGain > 0) {
-      this.ui.addScorePop(ring.cx, ring.cy, scoreGain, this.scoreManager.streak > 1);
+      this.ui.addScorePop(ring.cx, ring.cy, scoreGain, this.scoreManager.streak > 1, isClean);
+    }
+
+    // Ring success particles
+    this.ui.spawnRingParticles(ring.cx, ring.cy, this.renderer.scale);
+
+    // Update trail color based on streak
+    if (this.ball) {
+      this.ball.setTrailColorForStreak(this.scoreManager.streak);
     }
 
     // Check if we just exceeded personal best mid-run
@@ -436,6 +449,10 @@ class Game {
           this.ball.opacity = Math.max(0, 1 - this.runEndTimer / CONFIG.RUN_END_PAUSE);
         } else if (this.ball) {
           this.ball.opacity = 0;
+          // Trail art: gradually brighten frozen trail
+          if (this.ball.trailFrozen) {
+            this.ball.updateTrailArt(dt);
+          }
         }
 
         const totalLock = CONFIG.RUN_END_PAUSE + CONFIG.RUN_END_TRAIL_HOLD +
@@ -517,8 +534,18 @@ class Game {
 
     this.ringManager.renderFlash(ctx, gameWidth, gameHeight);
 
+    // Surface flashes
+    if (!inTrailHold) {
+      this.ui.renderSurfaceFlashes(ctx, scale);
+    }
+
+    // Particles (ring success)
+    this.ui.renderParticles(ctx, scale);
+
     if (this.state === State.DROPPING || this.state === State.RING_HIT) {
       this.ui.renderScore(ctx, gameWidth, gameHeight, scale, this.scoreManager);
+      // Bounce multiplier preview near ball
+      this.ui.renderBounceMultiplier(ctx, this.ball, scale, this.scoreManager.bounceCount);
     }
 
     if (isRunOver) {
@@ -526,6 +553,11 @@ class Game {
     }
 
     ctx.restore();
+
+    // Pause overlay (rendered outside screen shake transform)
+    if (this.paused && this.state !== State.MENU) {
+      this.ui.renderPauseOverlay(ctx, gameWidth, gameHeight, scale);
+    }
   }
 
   renderConstellations(ctx, gameWidth, gameHeight) {

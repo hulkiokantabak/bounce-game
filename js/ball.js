@@ -28,6 +28,8 @@ export class Ball {
     this.trailFrozen = false;
     this.trailCounter = 0;
     this.trailBrighten = 0;
+    this.trailColor = CONFIG.BALL_COLOR;
+    this.trailArtTimer = 0;
   }
 
   update(dt) {
@@ -77,6 +79,27 @@ export class Ball {
     this.trailBrighten = 0.2;
   }
 
+  setTrailColorForStreak(streak) {
+    if (streak >= 5) {
+      this.trailColor = CONFIG.RING_COLOR; // full gold
+    } else if (streak >= 3) {
+      this.trailColor = '#ffe0a0'; // warm gold
+    } else if (streak >= 1) {
+      this.trailColor = '#fff0d0'; // warm white
+    } else {
+      this.trailColor = CONFIG.BALL_COLOR;
+    }
+  }
+
+  updateTrailArt(dt) {
+    this.trailArtTimer += dt;
+    const progress = Math.min(this.trailArtTimer / CONFIG.TRAIL_ART_BRIGHTEN_DURATION, 1);
+    for (const p of this.trail) {
+      const baseOpacity = p.opacity || 0;
+      p.displayOpacity = baseOpacity + (CONFIG.TRAIL_START_OPACITY - baseOpacity) * progress * 0.6;
+    }
+  }
+
   addTrailPoint(time) {
     if (this.trailFrozen || !this.alive) return;
     this.trailCounter++;
@@ -113,16 +136,24 @@ export class Ball {
     ctx.lineWidth = CONFIG.TRAIL_WIDTH * this.scale;
     ctx.lineCap = 'round';
 
+    const color = this.trailColor || CONFIG.BALL_COLOR;
+
     for (let i = 1; i < this.trail.length; i++) {
       const p0 = this.trail[i - 1];
       const p1 = this.trail[i];
-      const opacity = this.getTrailPointOpacity(p1, currentTime);
+
+      let opacity;
+      if (this.trailFrozen && p1.displayOpacity !== undefined) {
+        opacity = p1.displayOpacity;
+      } else {
+        opacity = this.getTrailPointOpacity(p1, currentTime);
+      }
       if (opacity <= 0.001) continue;
 
       ctx.beginPath();
       ctx.moveTo(p0.x, p0.y);
       ctx.lineTo(p1.x, p1.y);
-      ctx.strokeStyle = hexToRgba(CONFIG.BALL_COLOR, opacity);
+      ctx.strokeStyle = hexToRgba(color, opacity);
       ctx.stroke();
     }
   }

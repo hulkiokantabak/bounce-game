@@ -122,6 +122,22 @@ class Ring {
     ctx.lineCap = 'butt';
 
     if (this.gapRevealed) {
+      // Gap direction indicator — faint dotted line pointing toward gap
+      if (approachFactor < 0.5) {
+        const indicatorLen = this.radius * 2.5;
+        const gapDirX = Math.cos(this.gapCenter);
+        const gapDirY = Math.sin(this.gapCenter);
+        ctx.globalAlpha = 0.08;
+        ctx.setLineDash([3, 6]);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(this.cx + gapDirX * this.radius * 1.2, this.cy + gapDirY * this.radius * 1.2);
+        ctx.lineTo(this.cx + gapDirX * indicatorLen, this.cy + gapDirY * indicatorLen);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.lineWidth = this.thickness;
+      }
+
       // Arc (non-gap) at pulsing opacity
       ctx.globalAlpha = brightness;
       ctx.beginPath();

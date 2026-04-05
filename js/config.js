@@ -113,6 +113,14 @@ export const CONFIG = {
   // Ring approach glow
   RING_APPROACH_DISTANCE: 200,
 
+  // Particles
+  RING_SUCCESS_PARTICLES: 12,
+  PARTICLE_SPEED: 150,
+  PARTICLE_LIFE: 0.6,
+
+  // Trail art
+  TRAIL_ART_BRIGHTEN_DURATION: 1.5,
+
   // Touch
   DEAD_ZONE_TOP: 0.05,
   DEAD_ZONE_BOTTOM: 0.05,
