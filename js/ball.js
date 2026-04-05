@@ -3,12 +3,41 @@ import { CONFIG, hexToRgba } from './config.js';
 export class Ball {
   constructor(gameWidth, gameHeight, scale, round = 1, speedMult = 1.0) {
     this.scale = scale;
-    this.radius = CONFIG.BALL_RADIUS * scale;
+    this.round = round;
+    this.speedMult = speedMult;
+
+    // Determine ball type for this round
+    this.ballType = 'standard';
+    if (round >= CONFIG.BALL_TYPE_INTRO_ROUND) {
+      const types = CONFIG.BALL_TYPES;
+      this.ballType = types[Math.floor(Math.random() * types.length)];
+    }
+
+    // Apply ball type modifiers
+    let radiusMult = 1.0;
+    this.gravityMult = 1.0;
+    this.ballRestitution = CONFIG.BALL_RESTITUTION;
+    this.driftForce = 0;
+
+    if (this.ballType === 'heavy') {
+      radiusMult = CONFIG.BALL_HEAVY_RADIUS_MULT;
+      this.gravityMult = CONFIG.BALL_HEAVY_GRAVITY_MULT;
+      this.ballRestitution = CONFIG.BALL_HEAVY_RESTITUTION;
+    } else if (this.ballType === 'bouncy') {
+      this.ballRestitution = CONFIG.BALL_BOUNCY_RESTITUTION;
+      this.gravityMult = CONFIG.BALL_BOUNCY_GRAVITY_MULT;
+    } else if (this.ballType === 'small') {
+      radiusMult = CONFIG.BALL_SMALL_RADIUS_MULT;
+      this.speedMult *= CONFIG.BALL_SMALL_SPEED_MULT;
+    } else if (this.ballType === 'floaty') {
+      this.gravityMult = CONFIG.BALL_FLOATY_GRAVITY_MULT;
+      this.driftForce = CONFIG.BALL_FLOATY_DRIFT;
+    }
+
+    this.radius = CONFIG.BALL_RADIUS * scale * radiusMult;
     // Glow boost at milestone round
     const glowMult = round >= CONFIG.GLOW_BOOST_ROUND ? 1.2 : 1.0;
     this.glowRadius = CONFIG.BALL_GLOW_RADIUS * scale * glowMult;
-    this.speedMult = speedMult;
-    this.round = round;
 
     // Spawn at top-center with random horizontal offset (widens after round 7)
     const offsetRange = round >= 8 ? CONFIG.BALL_OFFSET_WIDE : CONFIG.BALL_OFFSET_NARROW;
@@ -22,6 +51,9 @@ export class Ball {
     // Initial velocity: small horizontal nudge so ball doesn't drop straight
     this.vx = (Math.random() * 2 - 1) * CONFIG.BALL_INITIAL_VX_RANGE * scale;
     this.vy = 0;
+
+    // Spin — affects horizontal drift
+    this.spin = 0;
 
     this.alive = true;
     this.opacity = 0; // Fade in
@@ -49,9 +81,27 @@ export class Ball {
     this.prevX = this.x;
     this.prevY = this.y;
 
-    // Gravity scaled by speed curve (gentler on round 1)
-    const gravMult = this.round <= 1 ? CONFIG.GRAVITY_ROUND1_MULT : 1.0;
-    this.vy += CONFIG.GRAVITY * this.scale * this.speedMult * gravMult * dt;
+    // Gravity scaled by speed curve (gentler on round 1) + ball type modifier
+    const roundGravMult = this.round <= 1 ? CONFIG.GRAVITY_ROUND1_MULT : 1.0;
+    const totalGravMult = roundGravMult * this.gravityMult * (this.envGravityMult || 1.0);
+    this.vy += CONFIG.GRAVITY * this.scale * this.speedMult * totalGravMult * dt;
+
+    // Wind force (set by environment system)
+    if (this.windForce) {
+      this.vx += this.windForce * this.scale * dt;
+    }
+
+    // Floaty drift — random horizontal nudges
+    if (this.driftForce > 0) {
+      this.vx += (Math.random() - 0.5) * this.driftForce * this.scale * dt;
+    }
+
+    // Spin affects horizontal velocity (friction-like)
+    if (this.spin !== 0) {
+      this.vx += this.spin * CONFIG.BALL_SPIN_FRICTION * this.scale * dt * 60;
+      this.spin *= Math.pow(CONFIG.BALL_SPIN_DECAY, dt);
+      if (Math.abs(this.spin) < 0.01) this.spin = 0;
+    }
 
     // Speed cap
     const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
@@ -181,6 +231,16 @@ export class Ball {
   render(ctx) {
     if (this.opacity <= 0) return;
 
+    // Ball type colors
+    const typeColors = {
+      standard: CONFIG.BALL_COLOR,
+      heavy: '#ffbb88',
+      bouncy: '#88ffbb',
+      small: '#bbddff',
+      floaty: '#ddbbff',
+    };
+    const ballColor = typeColors[this.ballType] || CONFIG.BALL_COLOR;
+
     ctx.save();
     ctx.globalAlpha = this.opacity;
 
@@ -189,9 +249,9 @@ export class Ball {
       this.x, this.y, 0,
       this.x, this.y, this.glowRadius
     );
-    glowGrad.addColorStop(0, hexToRgba(CONFIG.BALL_COLOR, 0.4));
-    glowGrad.addColorStop(0.4, hexToRgba(CONFIG.BALL_COLOR, 0.15));
-    glowGrad.addColorStop(1, hexToRgba(CONFIG.BALL_COLOR, 0));
+    glowGrad.addColorStop(0, hexToRgba(ballColor, 0.4));
+    glowGrad.addColorStop(0.4, hexToRgba(ballColor, 0.15));
+    glowGrad.addColorStop(1, hexToRgba(ballColor, 0));
 
     ctx.beginPath();
     ctx.arc(this.x, this.y, this.glowRadius, 0, Math.PI * 2);
@@ -203,14 +263,31 @@ export class Ball {
       this.x, this.y, 0,
       this.x, this.y, this.radius
     );
-    ballGrad.addColorStop(0, CONFIG.BALL_COLOR);
-    ballGrad.addColorStop(0.85, CONFIG.BALL_COLOR);
-    ballGrad.addColorStop(1, hexToRgba(CONFIG.BALL_COLOR, 0.4));
+    ballGrad.addColorStop(0, ballColor);
+    ballGrad.addColorStop(0.85, ballColor);
+    ballGrad.addColorStop(1, hexToRgba(ballColor, 0.4));
 
     ctx.beginPath();
     ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
     ctx.fillStyle = ballGrad;
     ctx.fill();
+
+    // Spin indicator — rotating line inside ball
+    if (this.spin && Math.abs(this.spin) > 0.1) {
+      const spinAngle = (this.spin > 0 ? 1 : -1) * (Date.now() / 100);
+      ctx.strokeStyle = hexToRgba('#ffffff', 0.3);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(
+        this.x + Math.cos(spinAngle) * this.radius * 0.5,
+        this.y + Math.sin(spinAngle) * this.radius * 0.5
+      );
+      ctx.lineTo(
+        this.x - Math.cos(spinAngle) * this.radius * 0.5,
+        this.y - Math.sin(spinAngle) * this.radius * 0.5
+      );
+      ctx.stroke();
+    }
 
     ctx.restore();
   }

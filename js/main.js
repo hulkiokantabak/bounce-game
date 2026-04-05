@@ -60,6 +60,13 @@ class Game {
     // Ring approach audio state
     this.approachAudioTriggered = false;
 
+    // Environment state
+    this.wind = 0;
+    this.windTarget = 0;
+    this.windTimer = 0;
+    this.gravityPulse = false;
+    this.gravityPulseTimer = 0;
+
     // Menu constellations
     this.constellations = [];
     this.constellationsLoaded = false;
@@ -255,6 +262,19 @@ class Game {
     }
 
     this.state = State.DROPPING;
+
+    // Reset wind for new round
+    this.wind = 0;
+    this.windTarget = 0;
+    this.windTimer = 0;
+
+    // Chance of gravity pulse
+    if (this.scoreManager.round >= CONFIG.GRAVITY_PULSE_INTRO_ROUND && Math.random() < CONFIG.GRAVITY_PULSE_CHANCE) {
+      this.gravityPulse = true;
+      this.gravityPulseTimer = CONFIG.GRAVITY_PULSE_DURATION;
+      this.ui.showHint('low gravity!', this.renderer.gameWidth / 2, this.renderer.gameHeight * 0.2);
+    }
+
     this.aiHooks.notifyRoundStart(this.scoreManager.round);
     if (window.BounceAgent) window.BounceAgent._emit('roundStart', { round: this.scoreManager.round });
     this.ui.triggerRoundSweep();
@@ -533,6 +553,28 @@ class Game {
 
       case State.DROPPING:
         if (!this.ball) break;
+
+        // --- Environment: Wind ---
+        if (this.scoreManager.round >= CONFIG.WIND_INTRO_ROUND) {
+          this.windTimer += dt;
+          if (this.windTimer >= CONFIG.WIND_CHANGE_INTERVAL) {
+            this.windTimer = 0;
+            this.windTarget = (Math.random() - 0.5) * 2 * CONFIG.WIND_STRENGTH_MAX;
+          }
+          // Smooth wind transition
+          this.wind += (this.windTarget - this.wind) * dt * 2;
+          this.ball.windForce = this.wind;
+        }
+
+        // --- Environment: Gravity pulse ---
+        if (this.gravityPulse) {
+          this.gravityPulseTimer -= dt;
+          this.ball.envGravityMult = CONFIG.GRAVITY_PULSE_MULT;
+          if (this.gravityPulseTimer <= 0) {
+            this.gravityPulse = false;
+            this.ball.envGravityMult = 1.0;
+          }
+        }
 
         this.ball.update(dt);
         this.ball.checkWalls(this.renderer.gameWidth);
@@ -822,6 +864,51 @@ class Game {
       this.ui.renderScore(ctx, gameWidth, gameHeight, scale, this.scoreManager);
       // Bounce multiplier preview
       this.ui.renderBounceMultiplier(ctx, this.ball, scale, this.scoreManager.bounceCount);
+
+      // Wind indicator
+      if (Math.abs(this.wind) > 5) {
+        ctx.save();
+        const windAlpha = Math.min(Math.abs(this.wind) / CONFIG.WIND_STRENGTH_MAX, 1) * 0.2;
+        ctx.globalAlpha = windAlpha;
+        ctx.strokeStyle = '#88ccff';
+        ctx.lineWidth = 1;
+        const windDir = this.wind > 0 ? 1 : -1;
+        const windX = gameWidth / 2 + windDir * 30 * scale;
+        const windY = 8 * scale;
+        for (let i = 0; i < 3; i++) {
+          const ox = (i - 1) * 12 * scale;
+          ctx.beginPath();
+          ctx.moveTo(windX + ox - windDir * 6 * scale, windY);
+          ctx.lineTo(windX + ox + windDir * 6 * scale, windY);
+          ctx.lineTo(windX + ox + windDir * 3 * scale, windY - 3 * scale);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      // Ball type indicator
+      if (this.ball && this.ball.ballType !== 'standard' && this.scoreManager.round >= CONFIG.BALL_TYPE_INTRO_ROUND) {
+        ctx.save();
+        ctx.globalAlpha = 0.2;
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `${Math.round(10 * scale)}px monospace`;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'top';
+        ctx.fillText(this.ball.ballType, gameWidth - 12 * scale, 20 * scale);
+        ctx.restore();
+      }
+
+      // Gravity pulse indicator
+      if (this.gravityPulse) {
+        ctx.save();
+        ctx.globalAlpha = 0.15 + 0.05 * Math.sin(this.gameTime * 6);
+        ctx.fillStyle = '#aabbff';
+        ctx.font = `${Math.round(10 * scale)}px monospace`;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'top';
+        ctx.fillText('low-g', gameWidth - 12 * scale, 32 * scale);
+        ctx.restore();
+      }
       // Hint text on round 1
       if (this.scoreManager.round === 1 && this.ringManager.rings.length > 0) {
         const ring = this.ringManager.rings[0];

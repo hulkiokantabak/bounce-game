@@ -33,10 +33,40 @@ class Ring {
 
     // Dual-ring B: gap hidden until Ring A threaded
     this.gapRevealed = !isDual || isRingA;
+
+    // Ring events
+    this.event = null; // 'drift', 'rotate_gap', 'pulse_size'
+    this.eventData = {};
+  }
+
+  setEvent(type, data) {
+    this.event = type;
+    this.eventData = data || {};
   }
 
   update(dt) {
     this.pulseTime += dt;
+
+    // Ring events
+    if (this.event === 'drift' && this.active) {
+      this.cx += (this.eventData.vx || 0) * dt;
+      this.cy += (this.eventData.vy || 0) * dt;
+      // Bounce off screen edges
+      const margin = this.outerRadius + 10;
+      if (this.cx < margin || this.cx > (this.eventData.gw || 375) - margin) {
+        this.eventData.vx = -(this.eventData.vx || 0);
+      }
+      if (this.cy < margin || this.cy > (this.eventData.gh || 812) - margin) {
+        this.eventData.vy = -(this.eventData.vy || 0);
+      }
+    } else if (this.event === 'rotate_gap' && this.active && this.gapRevealed) {
+      this.gapCenter += CONFIG.RING_GAP_ROTATE_SPEED * dt;
+    } else if (this.event === 'pulse_size' && this.active) {
+      const pulse = Math.sin(this.pulseTime * CONFIG.RING_PULSE_SIZE_SPEED * Math.PI * 2);
+      const sizeMult = 1 + pulse * CONFIG.RING_PULSE_SIZE_AMOUNT;
+      this.innerRadius = (this.radius - this.thickness / 2) * sizeMult;
+      this.outerRadius = (this.radius + this.thickness / 2) * sizeMult;
+    }
 
     if (this.shattering) {
       this.shatterTimer += dt * 1000;
@@ -287,12 +317,11 @@ export class RingManager {
       gapCenter = Math.random() * Math.PI * 2 - Math.PI;
     }
 
-    // Position zone — gradual expansion
+    // Position zone — starts lower, expands upward with rounds
     let minYRatio, maxYRatio;
-    if (round <= 3) { minYRatio = 0.67; maxYRatio = 0.90; }
-    else if (round <= 6) { minYRatio = 0.55; maxYRatio = 0.90; }
-    else if (round <= 9) { minYRatio = 0.45; maxYRatio = 0.90; }
-    else { minYRatio = 0.35; maxYRatio = 0.90; }
+    if (round <= 2) { minYRatio = 0.55; maxYRatio = CONFIG.RING_MAX_Y_RATIO; }
+    else if (round <= 5) { minYRatio = 0.45; maxYRatio = CONFIG.RING_MAX_Y_RATIO; }
+    else { minYRatio = CONFIG.RING_MIN_Y_RATIO; maxYRatio = CONFIG.RING_MAX_Y_RATIO; }
 
     const margin = ringRadius + thickness;
     const minX = margin;
@@ -307,7 +336,25 @@ export class RingManager {
     } else {
       pos = this.findPosition(minX, maxX, minY, maxY, ringRadius, this.lastPosition);
     }
-    this.rings.push(new Ring(pos.x, pos.y, ringRadius, thickness, gapAngle, gapCenter, scale, this.isDualRound, true, round));
+    const ringA = new Ring(pos.x, pos.y, ringRadius, thickness, gapAngle, gapCenter, scale, this.isDualRound, true, round);
+
+    // Assign ring event for higher rounds
+    if (round >= CONFIG.RING_EVENT_INTRO_ROUND && Math.random() < CONFIG.RING_EVENT_CHANCE) {
+      const events = ['drift', 'rotate_gap', 'pulse_size'];
+      const evt = events[Math.floor(Math.random() * events.length)];
+      if (evt === 'drift') {
+        const angle = Math.random() * Math.PI * 2;
+        ringA.setEvent('drift', {
+          vx: Math.cos(angle) * CONFIG.RING_DRIFT_SPEED,
+          vy: Math.sin(angle) * CONFIG.RING_DRIFT_SPEED * 0.5,
+          gw: gameWidth, gh: gameHeight
+        });
+      } else {
+        ringA.setEvent(evt);
+      }
+    }
+
+    this.rings.push(ringA);
 
     if (this.isDualRound) {
       const posB = this.findPosition(minX, maxX, minY, maxY, ringRadius, pos);

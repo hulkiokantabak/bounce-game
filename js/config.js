@@ -184,6 +184,58 @@ export const CONFIG = {
   // Round 3: round badge
   ROUND_BADGE_DURATION: 1.2,
   ROUND_BADGE_SIZE: 28,
+
+  // Phase 4: Bounce dynamics
+  SURFACE_DEFLECT_STRENGTH: 0.7,     // how much offset from center affects vx
+  SURFACE_DEFLECT_MAX_VX: 400,       // max vx gained from deflection
+  BALL_SPIN_FRICTION: 0.15,          // how much spin affects vx over time
+  BALL_SPIN_DECAY: 0.92,             // spin decay per second (multiplied each frame)
+
+  // Phase 4: Surface types
+  SURFACE_TYPES: ['normal', 'spring', 'ice', 'sticky', 'angled_left', 'angled_right'],
+  SURFACE_SPRING_RESTITUTION: 1.3,   // bouncy!
+  SURFACE_ICE_DEFLECT_MULT: 2.5,     // extra sideways on ice
+  SURFACE_STICKY_RESTITUTION: 0.5,   // dampens bounce
+  SURFACE_STICKY_VX_DAMP: 0.3,       // kills horizontal speed
+  SURFACE_ANGLED_VX_BOOST: 250,      // angled surfaces kick ball sideways
+  SURFACE_TYPE_INTRO_ROUND: 3,       // when special surfaces start appearing
+  SURFACE_TYPE_CHANCE_BASE: 0.2,     // 20% chance of special surface at intro
+  SURFACE_TYPE_CHANCE_MAX: 0.5,      // 50% max
+  SURFACE_TYPE_CHANCE_RAMP_ROUND: 10,
+
+  // Phase 4: Ball types
+  BALL_TYPES: ['standard', 'heavy', 'bouncy', 'small', 'floaty'],
+  BALL_TYPE_INTRO_ROUND: 4,
+  BALL_HEAVY_GRAVITY_MULT: 1.4,
+  BALL_HEAVY_RESTITUTION: 0.7,
+  BALL_HEAVY_RADIUS_MULT: 1.3,
+  BALL_BOUNCY_RESTITUTION: 1.0,
+  BALL_BOUNCY_GRAVITY_MULT: 0.85,
+  BALL_SMALL_RADIUS_MULT: 0.7,
+  BALL_SMALL_SPEED_MULT: 1.15,
+  BALL_FLOATY_GRAVITY_MULT: 0.5,
+  BALL_FLOATY_DRIFT: 30,             // random horizontal drift per second
+
+  // Phase 4: Environmental effects
+  WIND_INTRO_ROUND: 5,
+  WIND_STRENGTH_MAX: 60,
+  WIND_CHANGE_INTERVAL: 3.0,         // seconds between wind shifts
+  GRAVITY_PULSE_INTRO_ROUND: 7,
+  GRAVITY_PULSE_CHANCE: 0.15,        // per round
+  GRAVITY_PULSE_DURATION: 2.0,
+  GRAVITY_PULSE_MULT: 0.4,           // temporary low gravity
+
+  // Phase 4: Ring events
+  RING_EVENT_INTRO_ROUND: 6,
+  RING_EVENT_CHANCE: 0.12,           // per round
+  RING_DRIFT_SPEED: 15,              // px/s for drifting ring
+  RING_GAP_ROTATE_SPEED: 0.5,        // rad/s for rotating gap
+  RING_PULSE_SIZE_AMOUNT: 0.15,      // ±15% size oscillation
+  RING_PULSE_SIZE_SPEED: 1.5,
+
+  // Phase 4: Ring positioning — from top 1/3 downward
+  RING_MIN_Y_RATIO: 0.33,
+  RING_MAX_Y_RATIO: 0.85,
 };
 
 export function hexToRgba(hex, alpha) {

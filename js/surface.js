@@ -1,13 +1,14 @@
 import { CONFIG } from './config.js';
 
 class Surface {
-  constructor(x, y, scale, decayTime, lengthMult) {
+  constructor(x, y, scale, decayTime, lengthMult, surfaceType) {
     this.x = x;
     this.y = y;
     this.scale = scale;
     this.halfLength = (CONFIG.SURFACE_LENGTH * scale * (lengthMult || 1)) / 2;
     this.halfThickness = (CONFIG.SURFACE_THICKNESS * scale) / 2;
     this.decayTime = decayTime || CONFIG.SURFACE_DECAY_TIME;
+    this.surfaceType = surfaceType || 'normal';
 
     this.hit = false;
     this.decaying = false;
@@ -88,7 +89,17 @@ class Surface {
 
     ctx.save();
     ctx.globalAlpha = this.opacity;
-    ctx.fillStyle = CONFIG.SURFACE_COLOR;
+
+    // Color by surface type
+    const typeColors = {
+      normal: CONFIG.SURFACE_COLOR,
+      spring: '#66ffaa',
+      ice: '#aaddff',
+      sticky: '#ffaa66',
+      angled_left: '#ddaaff',
+      angled_right: '#ddaaff',
+    };
+    ctx.fillStyle = typeColors[this.surfaceType] || CONFIG.SURFACE_COLOR;
 
     // Rounded rectangle (capsule)
     ctx.beginPath();
@@ -99,6 +110,45 @@ class Surface {
     ctx.arc(left + radius, top + radius, radius, Math.PI / 2, Math.PI * 3 / 2);
     ctx.closePath();
     ctx.fill();
+
+    // Type indicator marks
+    if (this.surfaceType === 'spring') {
+      // Zigzag line on spring
+      ctx.strokeStyle = '#33cc77';
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = this.opacity * 0.6;
+      ctx.beginPath();
+      const steps = 5;
+      for (let i = 0; i <= steps; i++) {
+        const px = left + (width / steps) * i;
+        const py = this.y + (i % 2 === 0 ? -2 : 2) * this.scale;
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    } else if (this.surfaceType === 'ice') {
+      // Shimmer dots
+      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = this.opacity * 0.3;
+      for (let i = 0; i < 3; i++) {
+        const dx = left + width * (0.2 + 0.3 * i);
+        ctx.beginPath();
+        ctx.arc(dx, this.y, 1 * this.scale, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (this.surfaceType === 'angled_left' || this.surfaceType === 'angled_right') {
+      // Arrow indicator
+      const dir = this.surfaceType === 'angled_left' ? -1 : 1;
+      ctx.strokeStyle = '#bb88ee';
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = this.opacity * 0.5;
+      const cx = this.x;
+      const arrowLen = 6 * this.scale;
+      ctx.beginPath();
+      ctx.moveTo(cx - dir * arrowLen, this.y);
+      ctx.lineTo(cx + dir * arrowLen, this.y);
+      ctx.lineTo(cx + dir * arrowLen - dir * 3 * this.scale, this.y - 3 * this.scale);
+      ctx.stroke();
+    }
 
     // Cracks from impact point
     if (this.hit && this.cracks.length > 0) {
@@ -130,7 +180,21 @@ export class SurfaceManager {
   place(x, y, scale, round, gameWidth) {
     const decayTime = round <= 1 ? CONFIG.SURFACE_DECAY_TIME_ROUND1 : CONFIG.SURFACE_DECAY_TIME;
     const lengthMult = (gameWidth && gameWidth < 400) ? CONFIG.SURFACE_LENGTH_SMALL_SCREEN_MULT : 1;
-    this.surfaces.push(new Surface(x, y, scale, decayTime, lengthMult));
+
+    // Determine surface type based on round
+    let surfaceType = 'normal';
+    if (round >= CONFIG.SURFACE_TYPE_INTRO_ROUND) {
+      const rampT = Math.min((round - CONFIG.SURFACE_TYPE_INTRO_ROUND) /
+        (CONFIG.SURFACE_TYPE_CHANCE_RAMP_ROUND - CONFIG.SURFACE_TYPE_INTRO_ROUND), 1);
+      const chance = CONFIG.SURFACE_TYPE_CHANCE_BASE + rampT * (CONFIG.SURFACE_TYPE_CHANCE_MAX - CONFIG.SURFACE_TYPE_CHANCE_BASE);
+      if (Math.random() < chance) {
+        // Pick a random special type (skip 'normal' at index 0)
+        const types = CONFIG.SURFACE_TYPES;
+        surfaceType = types[1 + Math.floor(Math.random() * (types.length - 1))];
+      }
+    }
+
+    this.surfaces.push(new Surface(x, y, scale, decayTime, lengthMult, surfaceType));
   }
 
   update(dt) {
@@ -168,8 +232,42 @@ export class SurfaceManager {
           // Position correction — push ball above surface
           ball.y = surfaceTop - ballRadius;
 
+          // --- DEFLECTION: offset from center creates horizontal force ---
+          const offset = (ball.x - surface.x) / surface.halfLength; // -1 to 1
+          let deflectVx = offset * CONFIG.SURFACE_DEFLECT_STRENGTH * Math.abs(ball.vy);
+          deflectVx = Math.max(-CONFIG.SURFACE_DEFLECT_MAX_VX * ball.scale,
+                     Math.min(CONFIG.SURFACE_DEFLECT_MAX_VX * ball.scale, deflectVx));
+
+          // --- Surface type modifiers ---
+          const type = surface.surfaceType;
+          let restitution = ball.ballRestitution || CONFIG.BALL_RESTITUTION;
+
+          if (type === 'spring') {
+            restitution = CONFIG.SURFACE_SPRING_RESTITUTION;
+          } else if (type === 'ice') {
+            deflectVx *= CONFIG.SURFACE_ICE_DEFLECT_MULT;
+            // Ice also adds randomness
+            deflectVx += (Math.random() - 0.5) * 100 * ball.scale;
+          } else if (type === 'sticky') {
+            restitution = CONFIG.SURFACE_STICKY_RESTITUTION;
+            ball.vx *= CONFIG.SURFACE_STICKY_VX_DAMP;
+            deflectVx *= 0.3;
+          } else if (type === 'angled_left') {
+            deflectVx -= CONFIG.SURFACE_ANGLED_VX_BOOST * ball.scale;
+          } else if (type === 'angled_right') {
+            deflectVx += CONFIG.SURFACE_ANGLED_VX_BOOST * ball.scale;
+          }
+
+          // Apply deflection to vx
+          ball.vx += deflectVx;
+
           // Reflect vy with restitution
-          ball.vy = -Math.abs(ball.vy) * CONFIG.BALL_RESTITUTION;
+          ball.vy = -Math.abs(ball.vy) * restitution;
+
+          // Apply spin from offset
+          if (ball.spin !== undefined) {
+            ball.spin += offset * 3;
+          }
 
           // Boost to MIN_SPEED if below
           const minSpeed = CONFIG.MIN_SPEED * ball.scale;
@@ -178,6 +276,7 @@ export class SurfaceManager {
           }
 
           surface.onHit(impactX);
+          this.lastHitType = type;
           return true;
         }
       }
