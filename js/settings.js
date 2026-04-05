@@ -345,14 +345,14 @@ export class Settings {
 
   renderExitButton(ctx, gameWidth, gameHeight, scale) {
     // Top-right corner — away from score (top-left)
-    const x = gameWidth - 20 * scale;
-    const y = 18 * scale;
-    const size = 8 * scale;
+    const x = gameWidth - 28 * scale;
+    const y = 28 * scale;
+    const size = 10 * scale;
 
     ctx.save();
-    ctx.globalAlpha = 0.35;
+    ctx.globalAlpha = 0.5;
     ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1.5 * scale;
+    ctx.lineWidth = 2 * scale;
     ctx.lineCap = 'round';
 
     // X shape for quit
@@ -367,9 +367,9 @@ export class Settings {
   }
 
   isExitTap(x, y, gameWidth, scale) {
-    const ex = gameWidth - 20 * scale;
-    const ey = 18 * scale;
-    const hitSize = 44 * scale;
+    const ex = gameWidth - 28 * scale;
+    const ey = 28 * scale;
+    const hitSize = 50 * scale;
     return x > ex - hitSize && x < ex + hitSize &&
            y > ey - hitSize && y < ey + hitSize;
   }

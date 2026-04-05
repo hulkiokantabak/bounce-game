@@ -171,6 +171,9 @@ export const CONFIG = {
   ROUND_SWEEP_DURATION: 0.3,
   ROUND_SWEEP_OPACITY: 0.05,
 
+  // Surface auto-decay: unhit surfaces fade after this time
+  SURFACE_AUTO_DECAY_TIME: 4.0,       // seconds before unhit surfaces start fading
+
   // Round 3: surface spawn animation
   SURFACE_SPAWN_DURATION: 0.05,       // 50ms scale-in
 

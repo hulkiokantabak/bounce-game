@@ -29,6 +29,9 @@ class Surface {
     // Spawn animation
     this.spawnTimer = 0;
     this.spawnDuration = CONFIG.SURFACE_SPAWN_DURATION;
+
+    // Auto-decay: unhit surfaces fade after a set time
+    this.age = 0;
   }
 
   onHit(impactX) {
@@ -59,6 +62,9 @@ class Surface {
       this.mutateFlash = Math.max(0, this.mutateFlash - dt);
     }
 
+    // Age tracking for auto-decay of unhit surfaces
+    this.age += dt;
+
     if (this.decaying) {
       this.decayTimer += dt;
       this.opacity = CONFIG.SURFACE_OPACITY * Math.max(0, 1 - this.decayTimer / this.decayTime);
@@ -71,6 +77,9 @@ class Surface {
       if (this.fadeTimer >= CONFIG.RUN_END_PAUSE) {
         this.removed = true;
       }
+    } else if (!this.hit && this.age > CONFIG.SURFACE_AUTO_DECAY_TIME) {
+      // Unhit surfaces auto-fade after a few seconds
+      this.fading = true;
     }
   }
 
@@ -359,13 +368,13 @@ export class SurfaceManager {
 
   /** Remove an unhit surface near (x, y). Returns true if one was removed. */
   tryRemoveAt(x, y) {
-    const threshold = 20; // px proximity to count as "tapping on surface"
+    const vThreshold = 30; // vertical proximity — generous for fat fingers / mouse clicks
+    const hPad = 15;       // horizontal padding beyond surface edges
     for (const s of this.surfaces) {
       if (s.hit || s.removed || s.fading) continue;
-      // Check if tap is within surface bounds (with some vertical tolerance)
-      if (Math.abs(y - s.y) < threshold &&
-          x >= s.x - s.halfLength - threshold &&
-          x <= s.x + s.halfLength + threshold) {
+      if (Math.abs(y - s.y) < vThreshold &&
+          x >= s.x - s.halfLength - hPad &&
+          x <= s.x + s.halfLength + hPad) {
         s.removed = true;
         return true;
       }
