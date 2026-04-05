@@ -272,8 +272,8 @@ export class SurfaceManager {
       const surfaceTop = surface.y - surface.halfThickness;
       const surfaceBottom = surface.y + surface.halfThickness;
 
-      // Detect overlap: ball is physically inside the surface zone
-      const overlapping = ballBottom > surfaceTop && ball.y < surfaceBottom + ballRadius;
+      // Detect overlap: ball is touching or inside the surface zone
+      const overlapping = ballBottom >= surfaceTop && ball.y < surfaceBottom + ballRadius;
 
       // Normal crossing: ball fell through surface top this frame (vy > 0)
       const crossed = ball.vy > 0 && prevBallBottom <= surfaceTop && ballBottom >= surfaceTop;
