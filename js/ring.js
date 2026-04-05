@@ -62,6 +62,24 @@ class Ring {
     return Math.abs(diff) < this.gapAngle / 2;
   }
 
+  getGapProximity(angle) {
+    // Returns 0-1 how close to the gap edge (1 = dead center, 0 = on the edge)
+    let diff = angle - this.gapCenter;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    return 1 - Math.abs(diff) / (this.gapAngle / 2);
+  }
+
+  isNearGap(angle) {
+    // Within 15° of gap edge but on the arc side
+    let diff = angle - this.gapCenter;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    const nearDeg = 15 * (Math.PI / 180);
+    const halfGap = this.gapAngle / 2;
+    return Math.abs(diff) > halfGap && Math.abs(diff) < halfGap + nearDeg;
+  }
+
   onSuccess() {
     this.active = false;
     this.success = true;
@@ -220,11 +238,11 @@ export class RingManager {
     this.isDualRound = round >= CONFIG.DUAL_RING_START_ROUND &&
       (round - CONFIG.DUAL_RING_START_ROUND) % CONFIG.DUAL_RING_FREQUENCY === 0;
 
-    // Gap direction based on round tier
+    // Gap direction based on round tier — smoother progression
     let gapCenter;
     if (round <= 3) {
       gapCenter = -Math.PI / 2; // upward
-    } else if (round <= 7) {
+    } else if (round <= 10) {
       const dirs = [0, Math.PI / 4, Math.PI / 2, 3 * Math.PI / 4,
         Math.PI, -3 * Math.PI / 4, -Math.PI / 2, -Math.PI / 4];
       gapCenter = dirs[Math.floor(Math.random() * dirs.length)];
@@ -232,10 +250,11 @@ export class RingManager {
       gapCenter = Math.random() * Math.PI * 2 - Math.PI;
     }
 
-    // Position zone based on round tier
+    // Position zone — gradual expansion
     let minYRatio, maxYRatio;
     if (round <= 3) { minYRatio = 0.67; maxYRatio = 0.90; }
-    else if (round <= 7) { minYRatio = 0.55; maxYRatio = 0.90; }
+    else if (round <= 6) { minYRatio = 0.55; maxYRatio = 0.90; }
+    else if (round <= 9) { minYRatio = 0.45; maxYRatio = 0.90; }
     else { minYRatio = 0.35; maxYRatio = 0.90; }
 
     const margin = ringRadius + thickness;
@@ -314,7 +333,10 @@ export class RingManager {
 
       const result = ring.checkCollision(ball);
       if (result) {
-        return { type: result, ring, ringIndex: i, collisionX: ball.x, collisionY: ball.y };
+        const angle = Math.atan2(ball.y - ring.cy, ball.x - ring.cx);
+        const gapProximity = result === 'gap' ? ring.getGapProximity(angle) : 0;
+        const isNearGap = result === 'arc' ? ring.isNearGap(angle) : false;
+        return { type: result, ring, ringIndex: i, collisionX: ball.x, collisionY: ball.y, gapProximity, isNearGap };
       }
     }
     return null;

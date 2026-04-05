@@ -53,6 +53,7 @@ class Game {
     // Menu constellations
     this.constellations = [];
     this.constellationsLoaded = false;
+    this.lastTrail = null;
     this.fetchConstellations();
 
     this.input.onTap = (x, y) => this.handleTap(x, y);
@@ -148,11 +149,11 @@ class Game {
 
   isSaveTap(x, y) {
     const { gameWidth, gameHeight, scale } = this.renderer;
-    const saveRight = gameWidth - 20 * scale;
+    const saveX = gameWidth - 40 * scale;
     const saveY = gameHeight * 0.92;
-    const hitW = 80 * scale;
-    const hitH = 40 * scale;
-    return x > saveRight - hitW && x < saveRight + 10 * scale &&
+    const hitW = 70 * scale;
+    const hitH = 36 * scale;
+    return x > saveX - hitW / 2 && x < saveX + hitW / 2 &&
            y > saveY - hitH / 2 && y < saveY + hitH / 2;
   }
 
@@ -201,6 +202,7 @@ class Game {
   }
 
   startNewRound() {
+    this.audio.playRoundTransition();
     this.scoreManager.nextRound();
 
     const { gameWidth, gameHeight, scale } = this.renderer;
@@ -236,6 +238,13 @@ class Game {
 
     this.surfaces.fadeAll();
     this.scoreManager.checkPersonalBest();
+
+    // Save trail for menu ghost
+    if (this.ball && this.ball.trail.length > 2) {
+      const gw = this.renderer.gameWidth;
+      const gh = this.renderer.gameHeight;
+      this.lastTrail = this.ball.trail.map(p => ({ x: p.x / gw, y: p.y / gh }));
+    }
   }
 
   handleRingGap(result) {
@@ -266,8 +275,21 @@ class Game {
 
     // "CLEAN!" if 0 bounces before threading
     const isClean = bouncesBeforeRing === 0;
+    // Near-miss: ball passed through but close to edge (proximity < 0.3)
+    const isClose = result.gapProximity < 0.3;
+
     if (scoreGain > 0) {
-      this.ui.addScorePop(ring.cx, ring.cy, scoreGain, this.scoreManager.streak > 1, isClean);
+      // Show multiplier breakdown on first 5 ring successes
+      const totalRings = this.scoreManager.streak + (this.scoreManager.round - 1);
+      const multIdx = Math.min(bouncesBeforeRing, CONFIG.BOUNCE_MULTIPLIERS.length - 1);
+      const mult = CONFIG.BOUNCE_MULTIPLIERS[multIdx];
+      const showMult = totalRings <= 5 && mult > 1;
+      this.ui.addScorePop(ring.cx, ring.cy, scoreGain, this.scoreManager.streak > 1, isClean, showMult ? mult : 0);
+    }
+
+    // Near-miss text
+    if (isClose && !isClean) {
+      this.ui.showHint('CLOSE!', ring.cx, ring.cy - ring.radius - 20 * this.renderer.scale);
     }
 
     // Ring success particles
@@ -293,6 +315,12 @@ class Game {
     result.ring.startShatter(result.collisionX, result.collisionY);
     // Record ring failure
     this.recorder.recordRingHit(result.ringIndex, this.gameTime, false);
+
+    // Near-death: hit the arc but was close to the gap
+    if (result.isNearGap) {
+      this.ui.showHint('SO CLOSE!', result.ring.cx, result.ring.cy - result.ring.radius - 20 * this.renderer.scale);
+    }
+
     this.endRun('ring_kill');
   }
 
@@ -499,6 +527,21 @@ class Game {
     this.renderer.clear();
 
     if (this.state === State.MENU || this.state === State.LEADERBOARD) {
+      // Render ghost trail from last run
+      if (this.lastTrail && this.lastTrail.length > 1) {
+        ctx.save();
+        ctx.globalAlpha = 0.08;
+        ctx.strokeStyle = CONFIG.BALL_COLOR;
+        ctx.lineWidth = CONFIG.TRAIL_WIDTH * scale;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(this.lastTrail[0].x * gameWidth, this.lastTrail[0].y * gameHeight);
+        for (let i = 1; i < this.lastTrail.length; i++) {
+          ctx.lineTo(this.lastTrail[i].x * gameWidth, this.lastTrail[i].y * gameHeight);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
       // Render constellations behind menu
       this.renderConstellations(ctx, gameWidth, gameHeight);
       this.ui.renderMenu(ctx, gameWidth, gameHeight, scale, this.scoreManager.personalBest);

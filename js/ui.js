@@ -61,8 +61,9 @@ export class UI {
     }
   }
 
-  addScorePop(x, y, score, isStreak, isClean) {
+  addScorePop(x, y, score, isStreak, isClean, mult) {
     let text = `+${score.toLocaleString()}`;
+    if (mult > 0) text += ` (${mult}\u00d7)`;
     if (isClean) text = `CLEAN! ${text}`;
     this.scorePops.push({ x, y, text, timer: 0, isStreak, isClean });
   }
@@ -424,21 +425,56 @@ export class UI {
       ctx.restore();
     }
 
-    // Save + restart prompt
+    // Save + restart prompt with tappable button outlines
     if (timer >= p4End) {
       ctx.save();
 
+      // Restart button with capsule
+      const restartY = gameHeight * 0.85;
       ctx.globalAlpha = 0.3;
       ctx.fillStyle = '#ffffff';
       ctx.font = `${Math.round(14 * scale)}px monospace`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('tap to restart', gameWidth / 2, gameHeight * 0.85);
+      ctx.fillText('tap to restart', gameWidth / 2, restartY);
 
-      // Save — bottom-right, gold if personal best
-      ctx.textAlign = 'right';
+      // Capsule outline around restart
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.12;
+      const rw = 120 * scale;
+      const rh = 28 * scale;
+      const rr = rh / 2;
+      ctx.beginPath();
+      ctx.moveTo(gameWidth / 2 - rw / 2 + rr, restartY - rh / 2);
+      ctx.lineTo(gameWidth / 2 + rw / 2 - rr, restartY - rh / 2);
+      ctx.arc(gameWidth / 2 + rw / 2 - rr, restartY, rr, -Math.PI / 2, Math.PI / 2);
+      ctx.lineTo(gameWidth / 2 - rw / 2 + rr, restartY + rh / 2);
+      ctx.arc(gameWidth / 2 - rw / 2 + rr, restartY, rr, Math.PI / 2, Math.PI * 3 / 2);
+      ctx.closePath();
+      ctx.stroke();
+
+      // Save button with capsule — bottom-right
+      const saveX = gameWidth - 40 * scale;
+      const saveY = gameHeight * 0.92;
+      ctx.globalAlpha = 0.3;
+      ctx.textAlign = 'center';
       ctx.fillStyle = scoreManager.isNewPersonalBest ? CONFIG.RING_COLOR : '#ffffff';
-      ctx.fillText('Save', gameWidth - 20 * scale, gameHeight * 0.92);
+      ctx.fillText('Save', saveX, saveY);
+
+      ctx.strokeStyle = scoreManager.isNewPersonalBest ? CONFIG.RING_COLOR : '#ffffff';
+      ctx.globalAlpha = 0.15;
+      const sw = 60 * scale;
+      const sh = 26 * scale;
+      const sr = sh / 2;
+      ctx.beginPath();
+      ctx.moveTo(saveX - sw / 2 + sr, saveY - sh / 2);
+      ctx.lineTo(saveX + sw / 2 - sr, saveY - sh / 2);
+      ctx.arc(saveX + sw / 2 - sr, saveY, sr, -Math.PI / 2, Math.PI / 2);
+      ctx.lineTo(saveX - sw / 2 + sr, saveY + sh / 2);
+      ctx.arc(saveX - sw / 2 + sr, saveY, sr, Math.PI / 2, Math.PI * 3 / 2);
+      ctx.closePath();
+      ctx.stroke();
 
       ctx.restore();
     }
