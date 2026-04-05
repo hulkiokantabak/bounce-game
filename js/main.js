@@ -77,6 +77,21 @@ class Game {
     this.seenSurfaceTypes = new Set();
     this.seenBallTypes = new Set(['standard']);
 
+    // Ball type tracking for weighted picks
+    this.lastBallType = null;
+
+    // Danger zone state
+    this.dangerTier = 0;
+    this.dangerNudgeTimer = 0;
+    this.dangerExtremeUsed = false;
+    this.dangerWarningApplied = false;
+    this.dangerGravTimer = 0;
+    this.dangerExtremeFlash = 0;
+
+    // Mood state
+    this.moodBounceCounter = 0;
+    this._moodOnNextRound = false;
+
     // Surface placement combo
     this.lastPlaceTime = 0;
     this.placeCombo = 0;
@@ -175,7 +190,13 @@ class Game {
           }
           this.lastPlaceTime = now;
 
-          this.surfaces.place(x, y, this.renderer.scale, this.scoreManager.round, this.renderer.gameWidth, this.placeCombo);
+          // Force special surface in danger zone
+          let forcedType = null;
+          if (this.dangerTier >= 1) {
+            const pool = CONFIG.DANGER_ZONE_SURFACE_POOL;
+            forcedType = pool[Math.floor(Math.random() * pool.length)];
+          }
+          this.surfaces.place(x, y, this.renderer.scale, this.scoreManager.round, this.renderer.gameWidth, this.placeCombo, forcedType);
           this.recorder.recordSurface(x, y, this.gameTime);
           this._playAudio('playPlace', y / this.renderer.gameHeight);
           this._vibrate(CONFIG.PLACE_VIBRATE);
@@ -297,7 +318,8 @@ class Game {
     this.recorder.start(gameWidth, gameHeight);
 
     const speedMult = this.ringManager.getSpeedCurve(this.scoreManager.round);
-    this.ball = new Ball(gameWidth, gameHeight, scale, this.scoreManager.round, speedMult);
+    this.ball = new Ball(gameWidth, gameHeight, scale, this.scoreManager.round, speedMult, this.lastBallType);
+    this.lastBallType = this.ball.ballType;
     this.ringManager.spawnForRound(this.scoreManager.round, gameWidth, gameHeight, scale);
 
     // Record initial ring spawns
@@ -312,12 +334,12 @@ class Game {
     this.ringHitTimer = 0;
     this.runBounceTotal = 0;
     this.runRingsThreaded = 0;
+    this.moodBounceCounter = 0;
+    this._resetDangerZone();
 
-    // Ball type announcement on first encounter
-    if (this.ball.ballType !== 'standard' && !this.seenBallTypes.has(this.ball.ballType)) {
-      this.seenBallTypes.add(this.ball.ballType);
+    // Ball type announcement — always show for non-standard
+    if (this.ball.ballType !== 'standard') {
       const ballHints = { heavy: 'heavy ball!', bouncy: 'bouncy ball!', small: 'small ball!', floaty: 'floaty ball!' };
-      this.ui.triggerRoundBadge(this.scoreManager.round);
       this.ui.showHint(ballHints[this.ball.ballType] || this.ball.ballType, this.renderer.gameWidth / 2, this.renderer.gameHeight * 0.18);
     }
 
@@ -336,8 +358,10 @@ class Game {
 
     const { gameWidth, gameHeight, scale } = this.renderer;
     const speedMult = this.ringManager.getSpeedCurve(this.scoreManager.round);
-    this.ball = new Ball(gameWidth, gameHeight, scale, this.scoreManager.round, speedMult);
+    this.ball = new Ball(gameWidth, gameHeight, scale, this.scoreManager.round, speedMult, this.lastBallType);
+    this.lastBallType = this.ball.ballType;
     this.ringManager.spawnForRound(this.scoreManager.round, gameWidth, gameHeight, scale);
+    this.surfaces.resetRoundCount();
 
     // Record ring spawns for new round
     for (let i = 0; i < this.ringManager.rings.length; i++) {
@@ -345,6 +369,7 @@ class Game {
     }
 
     this.state = State.DROPPING;
+    this._resetDangerZone();
 
     // Reset wind for new round
     this.wind = 0;
@@ -367,11 +392,16 @@ class Game {
       this.ui.triggerRoundBadge(this.scoreManager.round);
     }
 
-    // Ball type announcement on first encounter
-    if (this.ball.ballType !== 'standard' && !this.seenBallTypes.has(this.ball.ballType)) {
-      this.seenBallTypes.add(this.ball.ballType);
+    // Ball type announcement — always show for non-standard
+    if (this.ball.ballType !== 'standard') {
       const ballHints = { heavy: 'heavy ball!', bouncy: 'bouncy ball!', small: 'small ball!', floaty: 'floaty ball!' };
       this.ui.showHint(ballHints[this.ball.ballType] || this.ball.ballType, this.renderer.gameWidth / 2, this.renderer.gameHeight * 0.18);
+    }
+
+    // Deferred mood from ring success — apply to new ball
+    if (this._moodOnNextRound) {
+      this._moodOnNextRound = false;
+      this._triggerMood();
     }
   }
 
@@ -434,6 +464,130 @@ class Game {
     }
   }
 
+  // --- Danger Zone ---
+
+  _resetDangerZone() {
+    this.dangerTier = 0;
+    this.dangerNudgeTimer = 0;
+    this.dangerExtremeUsed = false;
+    this.dangerWarningApplied = false;
+    this.dangerGravTimer = 0;
+    this.dangerExtremeFlash = 0;
+  }
+
+  updateDangerZone(dt) {
+    if (!this.ball || !this.ball.alive) return;
+    if (this.gameTime < CONFIG.DANGER_ZONE_ENABLE_TIME) return;
+
+    const { gameHeight, scale } = this.renderer;
+    const yRatio = this.ball.y / gameHeight;
+
+    // Danger zone gravity timer
+    if (this.dangerGravTimer > 0) {
+      this.dangerGravTimer -= dt;
+      this.ball.envGravityMult = this.dangerTier >= 3 ? 0 : CONFIG.DANGER_ZONE_NUDGE_GRAVITY_MULT;
+      if (this.dangerGravTimer <= 0) {
+        this.ball.envGravityMult = this.gravityPulse ? CONFIG.GRAVITY_PULSE_MULT : 1.0;
+      }
+    }
+
+    // Extreme flash decay
+    if (this.dangerExtremeFlash > 0) {
+      this.dangerExtremeFlash -= dt;
+    }
+
+    // Reset when ball rises safely
+    if (yRatio < CONFIG.DANGER_ZONE_RESET_Y && this.dangerTier > 0) {
+      // Survived — award bonus if was at extreme
+      if (this.dangerTier >= 3) {
+        this.scoreManager.addBonus(CONFIG.DANGER_ZONE_SAVED_BONUS);
+        this.ui.addScorePop(this.ball.x, this.ball.y, CONFIG.DANGER_ZONE_SAVED_BONUS, false, false, 0);
+        this.ui.showHint('SAVED!', this.ball.x, this.ball.y - 30 * scale);
+      }
+      this._resetDangerZone();
+      return;
+    }
+
+    // Only escalate when falling
+    if (this.ball.vy <= 0) return;
+
+    // Tier 3 — Extreme
+    if (yRatio > CONFIG.DANGER_ZONE_EXTREME_Y && !this.dangerExtremeUsed) {
+      this.dangerTier = 3;
+      this.dangerExtremeUsed = true;
+
+      // Random dramatic intervention
+      const roll = Math.random();
+      if (roll < 0.4) {
+        // Zero gravity
+        this.dangerGravTimer = CONFIG.DANGER_ZONE_EXTREME_ZERO_G_DURATION;
+        this.ball.envGravityMult = 0;
+      } else if (roll < 0.8) {
+        // Strong upward gust
+        this.ball.vy = CONFIG.DANGER_ZONE_EXTREME_GUST_VY * scale;
+      } else {
+        // Zero-G + horizontal kick
+        this.dangerGravTimer = CONFIG.DANGER_ZONE_EXTREME_ZERO_G_DURATION;
+        this.ball.envGravityMult = 0;
+        this.ball.vx += (Math.random() - 0.5) * 400 * scale;
+      }
+
+      this.dangerExtremeFlash = 0.2;
+      this._vibrate([30, 80, 30, 80, 30]);
+      this.renderer.shake(2.0);
+
+      // Mutate surfaces in danger zone
+      this.surfaces.mutateSurfacesInDangerZone(gameHeight * CONFIG.DANGER_ZONE_MUTATE_Y_RATIO);
+      return;
+    }
+
+    // Tier 2 — Danger: random nudges
+    if (yRatio > CONFIG.DANGER_ZONE_DANGER_Y) {
+      this.dangerTier = Math.max(this.dangerTier, 2);
+      this.dangerNudgeTimer += dt;
+
+      if (this.dangerNudgeTimer >= CONFIG.DANGER_ZONE_NUDGE_INTERVAL) {
+        this.dangerNudgeTimer = 0;
+        const nudge = Math.random();
+        if (nudge < 0.4) {
+          // Horizontal kick
+          this.ball.vx += (Math.random() - 0.5) * CONFIG.DANGER_ZONE_NUDGE_VX_RANGE * 2 * scale;
+        } else if (nudge < 0.7) {
+          // Small upward boost
+          this.ball.vy += CONFIG.DANGER_ZONE_NUDGE_VY_BOOST * scale;
+        } else {
+          // Brief gravity reduction
+          this.dangerGravTimer = CONFIG.DANGER_ZONE_NUDGE_GRAVITY_DURATION;
+        }
+        this.renderer.shake(0.3);
+      }
+
+      // Mutate surfaces in danger zone
+      this.surfaces.mutateSurfacesInDangerZone(gameHeight * CONFIG.DANGER_ZONE_MUTATE_Y_RATIO);
+      return;
+    }
+
+    // Tier 1 — Warning: one-time speed boost
+    if (yRatio > CONFIG.DANGER_ZONE_WARNING_Y) {
+      if (!this.dangerWarningApplied) {
+        this.dangerTier = 1;
+        this.dangerWarningApplied = true;
+        this.ball.vy *= CONFIG.DANGER_ZONE_WARNING_SPEED_BOOST;
+      }
+    }
+  }
+
+  // --- Mood triggers ---
+
+  _triggerMood() {
+    if (!this.ball) return;
+    const types = CONFIG.MOOD_TYPES;
+    const mood = types[Math.floor(Math.random() * types.length)];
+    this.ball.applyMood(mood);
+    const moodColor = CONFIG.MOOD_COLORS[mood] || '#ffffff';
+    this.ui.showHint(mood + '!', this.ball.x, this.ball.y - this.ball.radius - 20 * this.renderer.scale);
+  }
+
   handleRingGap(result) {
     const { ring, ringIndex } = result;
     this.ringManager.onRingSuccess(ringIndex, this.ball, this.scoreManager.streak);
@@ -467,6 +621,10 @@ class Game {
       scoreGain = this.scoreManager.onSingleRingSuccess();
       this.enterRingHit();
     }
+
+    // Mood will trigger on new ball after round transition (deferred)
+    this._moodOnNextRound = CONFIG.MOOD_RING_TRIGGER;
+    this.moodBounceCounter = 0;
 
     // "CLEAN!" if 0 bounces before threading
     const isClean = bouncesBeforeRing === 0;
@@ -705,6 +863,9 @@ class Game {
         this.ball.update(dt);
         this.ball.checkWalls(this.renderer.gameWidth);
 
+        // Danger zone chaos — escalating interventions when ball is low
+        this.updateDangerZone(dt);
+
         // AI demo auto-play — place surfaces automatically
         if (this.settings.aiDemoEnabled && this.ball && this.ball.alive) {
           this.aiDemoPlaceTimer += dt;
@@ -738,6 +899,12 @@ class Game {
           const isFirstBounce = this.scoreManager.bounceCount === 0 && this.scoreManager.round <= 2;
           this.scoreManager.onBounce();
           this.runBounceTotal++;
+          // Mood trigger every N bounces
+          this.moodBounceCounter++;
+          if (this.moodBounceCounter >= CONFIG.MOOD_BOUNCE_TRIGGER) {
+            this.moodBounceCounter = 0;
+            this._triggerMood();
+          }
           const speed = Math.sqrt(this.ball.vx * this.ball.vx + this.ball.vy * this.ball.vy) / this.ball.scale;
           const hitSurfaceType = this.surfaces.lastHitType || 'normal';
           if (hitSurfaceType !== 'normal') {
@@ -915,6 +1082,28 @@ class Game {
 
     // Background star field — subtle twinkling dots
     this.ui.renderStars(ctx, gameWidth, gameHeight, scale, this.gameTime);
+
+    // Danger zone overlay — amber/red gradient at bottom
+    if (this.dangerTier > 0 && (this.state === State.DROPPING || this.state === State.RING_HIT)) {
+      ctx.save();
+      const dzHeight = gameHeight * 0.4;
+      const dzGrad = ctx.createLinearGradient(0, gameHeight - dzHeight, 0, gameHeight);
+      if (this.dangerTier >= 3 || this.dangerExtremeFlash > 0) {
+        const flashAlpha = this.dangerExtremeFlash > 0 ? 0.15 * (this.dangerExtremeFlash / 0.2) : 0;
+        dzGrad.addColorStop(0, 'rgba(255,50,30,0)');
+        dzGrad.addColorStop(1, `rgba(255,50,30,${0.12 + flashAlpha})`);
+      } else if (this.dangerTier >= 2) {
+        dzGrad.addColorStop(0, 'rgba(255,100,30,0)');
+        dzGrad.addColorStop(1, 'rgba(255,100,30,0.10)');
+      } else {
+        const pulse = 0.06 + 0.03 * Math.sin(this.gameTime * CONFIG.DANGER_ZONE_NUDGE_INTERVAL * 20);
+        dzGrad.addColorStop(0, 'rgba(255,170,50,0)');
+        dzGrad.addColorStop(1, `rgba(255,170,50,${pulse})`);
+      }
+      ctx.fillStyle = dzGrad;
+      ctx.fillRect(0, gameHeight - dzHeight, gameWidth, dzHeight);
+      ctx.restore();
+    }
 
     if (this.state === State.MENU || this.state === State.LEADERBOARD) {
       // Render ghost trail from last run
@@ -1129,7 +1318,7 @@ class Game {
       }
 
       // Ball type indicator
-      if (this.ball && this.ball.ballType !== 'standard' && this.scoreManager.round >= CONFIG.BALL_TYPE_INTRO_ROUND) {
+      if (this.ball && this.ball.ballType !== 'standard') {
         ctx.save();
         ctx.globalAlpha = 0.3;
         ctx.fillStyle = '#ffffff';

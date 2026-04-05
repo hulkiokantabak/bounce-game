@@ -38,6 +38,12 @@ export class ScoreManager {
     this.bounceCount++;
   }
 
+  addBonus(points) {
+    this.score += points;
+    this.lastScoreGain = points;
+    this.scorePulse = 1.0;
+  }
+
   getBounceMultiplier() {
     const idx = Math.min(this.bounceCount, CONFIG.BOUNCE_MULTIPLIERS.length - 1);
     return CONFIG.BOUNCE_MULTIPLIERS[idx];

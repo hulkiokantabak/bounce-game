@@ -198,14 +198,23 @@ export const CONFIG = {
   SURFACE_STICKY_RESTITUTION: 0.5,   // dampens bounce
   SURFACE_STICKY_VX_DAMP: 0.3,       // kills horizontal speed
   SURFACE_ANGLED_VX_BOOST: 250,      // angled surfaces kick ball sideways
-  SURFACE_TYPE_INTRO_ROUND: 3,       // when special surfaces start appearing
+  SURFACE_TYPE_INTRO_ROUND: 1,       // special surfaces from the start
   SURFACE_TYPE_CHANCE_BASE: 0.2,     // 20% chance of special surface at intro
   SURFACE_TYPE_CHANCE_MAX: 0.5,      // 50% max
   SURFACE_TYPE_CHANCE_RAMP_ROUND: 10,
+  SURFACE_R1_GUARANTEED_COUNT: 2,
+  SURFACE_R1_GUARANTEED_FIRST: 'spring',
+  SURFACE_R1_GUARANTEED_POOL: ['ice', 'angled_left', 'angled_right'],
+  SURFACE_R1_CHANCE: 0.15,
+  SURFACE_R2_CHANCE: 0.20,
 
-  // Phase 4: Ball types
+  // Phase 4: Ball types — variety from Round 1
   BALL_TYPES: ['standard', 'heavy', 'bouncy', 'small', 'floaty'],
-  BALL_TYPE_INTRO_ROUND: 4,
+  BALL_R1_TYPES: ['bouncy', 'floaty'],
+  BALL_R2_TYPES: ['standard', 'bouncy', 'floaty'],
+  BALL_R3_PLUS_TYPES: ['standard', 'heavy', 'bouncy', 'small', 'floaty'],
+  BALL_MIN_GRAVITY_MULT: 0.4,
+  BALL_REPEAT_WEIGHT: 0.3,
   BALL_HEAVY_GRAVITY_MULT: 1.4,
   BALL_HEAVY_RESTITUTION: 0.7,
   BALL_HEAVY_RADIUS_MULT: 1.3,
@@ -280,6 +289,44 @@ export const CONFIG = {
 
   // Phase 6: First-run tutorial
   TUTORIAL_HINT_R1_DELAY: 1.0,        // seconds before showing R1 hint
+
+  // Phase 7: Danger Zone — escalating chaos when ball is low
+  DANGER_ZONE_ENABLE_TIME: 1.0,
+  DANGER_ZONE_WARNING_Y: 0.70,
+  DANGER_ZONE_DANGER_Y: 0.82,
+  DANGER_ZONE_EXTREME_Y: 0.90,
+  DANGER_ZONE_RESET_Y: 0.65,
+  DANGER_ZONE_WARNING_SPEED_BOOST: 1.08,
+  DANGER_ZONE_NUDGE_INTERVAL: 0.3,
+  DANGER_ZONE_NUDGE_VX_RANGE: 200,
+  DANGER_ZONE_NUDGE_VY_BOOST: -150,
+  DANGER_ZONE_NUDGE_GRAVITY_MULT: 0.5,
+  DANGER_ZONE_NUDGE_GRAVITY_DURATION: 0.4,
+  DANGER_ZONE_EXTREME_ZERO_G_DURATION: 0.6,
+  DANGER_ZONE_EXTREME_GUST_VY: -400,
+  DANGER_ZONE_EXTREME_SIZE_PULSE: 1.5,
+  DANGER_ZONE_EXTREME_SIZE_DURATION: 0.3,
+  DANGER_ZONE_RESCUE_BONUS: 25,
+  DANGER_ZONE_SAVED_BONUS: 50,
+  DANGER_ZONE_SURFACE_POOL: ['spring', 'spring', 'ice', 'angled_left', 'angled_right'],
+  DANGER_ZONE_MUTATE_Y_RATIO: 0.70,
+
+  // Phase 7: Ball mood shifts — temporary physics modifiers
+  MOOD_BOUNCE_TRIGGER: 8,
+  MOOD_RING_TRIGGER: true,
+  MOOD_DURATION: 2.5,
+  MOOD_TYPES: ['excited', 'heavy', 'slippery', 'zen'],
+  MOOD_EXCITED_RESTITUTION_BONUS: 0.15,
+  MOOD_EXCITED_GRAVITY_MULT: 0.85,
+  MOOD_HEAVY_GRAVITY_MULT: 1.3,
+  MOOD_HEAVY_RESTITUTION_PENALTY: 0.1,
+  MOOD_SLIPPERY_DRIFT: 40,
+  MOOD_SLIPPERY_SPIN_DECAY: 0.7,
+  MOOD_ZEN_GRAVITY_MULT: 0.6,
+  MOOD_ZEN_AIR_DRAG_MULT: 2.0,
+  MOOD_FLASH_DURATION: 0.15,
+  MOOD_GLOW_BLEND: 0.2,
+  MOOD_COLORS: { excited: '#ffdd44', heavy: '#ff8866', slippery: '#66ddff', zen: '#aaddaa' },
 };
 
 export function hexToRgba(hex, alpha) {

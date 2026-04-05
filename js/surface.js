@@ -15,6 +15,8 @@ class Surface {
     this.decayTimer = 0;
     this.opacity = CONFIG.SURFACE_OPACITY;
     this.removed = false;
+    this.mutated = false;
+    this.mutateFlash = 0;
 
     // Crack data (set on hit)
     this.impactX = 0;
@@ -50,6 +52,11 @@ class Surface {
     // Spawn animation
     if (this.spawnTimer < this.spawnDuration) {
       this.spawnTimer += dt;
+    }
+
+    // Mutate flash decay
+    if (this.mutateFlash > 0) {
+      this.mutateFlash = Math.max(0, this.mutateFlash - dt);
     }
 
     if (this.decaying) {
@@ -150,6 +157,17 @@ class Surface {
       ctx.stroke();
     }
 
+    // Mutate flash glow
+    if (this.mutateFlash > 0) {
+      const flashAlpha = this.mutateFlash / 0.2 * 0.5;
+      ctx.globalAlpha = flashAlpha;
+      ctx.shadowColor = typeColors[this.surfaceType] || '#ffffff';
+      ctx.shadowBlur = 12 * this.scale;
+      ctx.fillStyle = typeColors[this.surfaceType] || '#ffffff';
+      ctx.fillRect(left, top, width, height);
+      ctx.shadowBlur = 0;
+    }
+
     // Cracks from impact point
     if (this.hit && this.cracks.length > 0) {
       const growth = Math.min(this.decayTimer / (this.decayTime * 0.4), 1);
@@ -175,9 +193,14 @@ class Surface {
 export class SurfaceManager {
   constructor() {
     this.surfaces = [];
+    this.roundSurfaceCount = 0;
   }
 
-  place(x, y, scale, round, gameWidth, combo) {
+  resetRoundCount() {
+    this.roundSurfaceCount = 0;
+  }
+
+  place(x, y, scale, round, gameWidth, combo, forcedType) {
     let decayTime = round <= 1 ? CONFIG.SURFACE_DECAY_TIME_ROUND1 : CONFIG.SURFACE_DECAY_TIME;
     // Combo bonus: rapid placement extends surface life
     if (combo > 0) {
@@ -185,20 +208,49 @@ export class SurfaceManager {
     }
     const lengthMult = (gameWidth && gameWidth < 400) ? CONFIG.SURFACE_LENGTH_SMALL_SCREEN_MULT : 1;
 
-    // Determine surface type based on round
-    let surfaceType = 'normal';
-    if (round >= CONFIG.SURFACE_TYPE_INTRO_ROUND) {
-      const rampT = Math.min((round - CONFIG.SURFACE_TYPE_INTRO_ROUND) /
-        (CONFIG.SURFACE_TYPE_CHANCE_RAMP_ROUND - CONFIG.SURFACE_TYPE_INTRO_ROUND), 1);
-      const chance = CONFIG.SURFACE_TYPE_CHANCE_BASE + rampT * (CONFIG.SURFACE_TYPE_CHANCE_MAX - CONFIG.SURFACE_TYPE_CHANCE_BASE);
-      if (Math.random() < chance) {
-        // Pick a random special type (skip 'normal' at index 0)
-        const types = CONFIG.SURFACE_TYPES;
-        surfaceType = types[1 + Math.floor(Math.random() * (types.length - 1))];
+    // Determine surface type
+    let surfaceType = forcedType || 'normal';
+    if (!forcedType) {
+      if (round === 1) {
+        // R1 guaranteed specials for first N surfaces, then low chance
+        if (this.roundSurfaceCount < CONFIG.SURFACE_R1_GUARANTEED_COUNT) {
+          surfaceType = this.roundSurfaceCount === 0
+            ? CONFIG.SURFACE_R1_GUARANTEED_FIRST
+            : CONFIG.SURFACE_R1_GUARANTEED_POOL[Math.floor(Math.random() * CONFIG.SURFACE_R1_GUARANTEED_POOL.length)];
+        } else if (Math.random() < CONFIG.SURFACE_R1_CHANCE) {
+          const types = CONFIG.SURFACE_TYPES;
+          surfaceType = types[1 + Math.floor(Math.random() * (types.length - 1))];
+        }
+      } else if (round === 2) {
+        if (Math.random() < CONFIG.SURFACE_R2_CHANCE) {
+          const types = CONFIG.SURFACE_TYPES;
+          surfaceType = types[1 + Math.floor(Math.random() * (types.length - 1))];
+        }
+      } else {
+        // R3+ ramp: 20% → 50%
+        const rampT = Math.min((round - 3) / (CONFIG.SURFACE_TYPE_CHANCE_RAMP_ROUND - 3), 1);
+        const chance = CONFIG.SURFACE_TYPE_CHANCE_BASE + rampT * (CONFIG.SURFACE_TYPE_CHANCE_MAX - CONFIG.SURFACE_TYPE_CHANCE_BASE);
+        if (Math.random() < chance) {
+          const types = CONFIG.SURFACE_TYPES;
+          surfaceType = types[1 + Math.floor(Math.random() * (types.length - 1))];
+        }
       }
     }
 
+    this.roundSurfaceCount++;
     this.surfaces.push(new Surface(x, y, scale, decayTime, lengthMult, surfaceType));
+  }
+
+  mutateSurfacesInDangerZone(yThreshold) {
+    const pool = CONFIG.DANGER_ZONE_SURFACE_POOL;
+    for (const s of this.surfaces) {
+      if (!s.hit && !s.removed && !s.mutated && s.surfaceType === 'normal' && s.y > yThreshold) {
+        const newType = pool[Math.floor(Math.random() * pool.length)];
+        s.surfaceType = newType;
+        s.mutated = true;
+        s.mutateFlash = 0.2;
+      }
+    }
   }
 
   update(dt) {
@@ -244,7 +296,7 @@ export class SurfaceManager {
 
           // --- Surface type modifiers ---
           const type = surface.surfaceType;
-          let restitution = ball.ballRestitution || CONFIG.BALL_RESTITUTION;
+          let restitution = (ball.getEffectiveRestitution ? ball.getEffectiveRestitution() : ball.ballRestitution) || CONFIG.BALL_RESTITUTION;
 
           if (type === 'spring') {
             // Cap combined restitution so bouncy ball + spring doesn't go orbital
@@ -304,5 +356,6 @@ export class SurfaceManager {
 
   clear() {
     this.surfaces = [];
+    this.roundSurfaceCount = 0;
   }
 }
