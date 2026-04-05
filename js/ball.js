@@ -103,8 +103,16 @@ export class Ball {
       if (Math.abs(this.spin) < 0.01) this.spin = 0;
     }
 
-    // Speed cap
+    // Air drag — subtle resistance at high speeds for natural-feeling arcs
     const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+    if (speed > 0) {
+      const dragForce = CONFIG.AIR_DRAG * speed * speed;
+      const dragFactor = Math.max(0, 1 - (dragForce / speed) * dt);
+      this.vx *= dragFactor;
+      this.vy *= dragFactor;
+    }
+
+    // Speed cap
     const maxSpeed = CONFIG.MAX_SPEED * this.scale;
     if (speed > maxSpeed) {
       const factor = maxSpeed / speed;
@@ -138,6 +146,12 @@ export class Ball {
       this.x = gameWidth - this.radius;
       this.vx = -Math.abs(this.vx) * CONFIG.WALL_RESTITUTION;
       this.wallHit = { x: gameWidth, y: this.y };
+    }
+    // Ceiling bounce — prevents ball from leaving top of screen
+    if (this.y - this.radius < 0 && this.vy < 0) {
+      this.y = this.radius;
+      this.vy = Math.abs(this.vy) * CONFIG.CEILING_RESTITUTION;
+      this.wallHit = { x: this.x, y: 0 };
     }
   }
 

@@ -71,6 +71,10 @@ class Game {
     this.seenSurfaceTypes = new Set();
     this.seenBallTypes = new Set(['standard']);
 
+    // Surface placement combo
+    this.lastPlaceTime = 0;
+    this.placeCombo = 0;
+
     // Menu constellations
     this.constellations = [];
     this.constellationsLoaded = false;
@@ -131,11 +135,32 @@ class Game {
       case State.DROPPING:
       case State.RING_HIT:
         if (!this.isInDeadZone(y)) {
-          this.surfaces.place(x, y, this.renderer.scale, this.scoreManager.round, this.renderer.gameWidth);
+          // Cap surfaces to prevent performance issues
+          if (this.surfaces.surfaces.length >= CONFIG.MAX_SURFACES) {
+            // Remove oldest non-hit surface
+            const oldest = this.surfaces.surfaces.find(s => !s.hit && !s.removed);
+            if (oldest) oldest.removed = true;
+          }
+
+          // Surface placement combo — rapid placement extends decay
+          const now = this.gameTime;
+          if (now - this.lastPlaceTime < CONFIG.SURFACE_COMBO_WINDOW) {
+            this.placeCombo = Math.min(this.placeCombo + 1, CONFIG.SURFACE_COMBO_MAX);
+          } else {
+            this.placeCombo = 0;
+          }
+          this.lastPlaceTime = now;
+
+          this.surfaces.place(x, y, this.renderer.scale, this.scoreManager.round, this.renderer.gameWidth, this.placeCombo);
           this.recorder.recordSurface(x, y, this.gameTime);
           this._playAudio('playPlace', y / this.renderer.gameHeight);
           this._vibrate(CONFIG.PLACE_VIBRATE);
           this.ui.addSurfaceFlash(x, y);
+
+          // Show combo indicator for rapid placement
+          if (this.placeCombo >= 2) {
+            this.ui.showHint(`x${this.placeCombo} combo!`, x, y - 20 * this.renderer.scale);
+          }
         }
         break;
 
@@ -368,6 +393,13 @@ class Game {
   handleRingGap(result) {
     const { ring, ringIndex } = result;
     this.ringManager.onRingSuccess(ringIndex, this.ball, this.scoreManager.streak);
+
+    // Transfer ring drift velocity to ball for dynamic interaction
+    if (ring.event === 'drift' && ring.eventData) {
+      this.ball.vx += (ring.eventData.vx || 0) * CONFIG.RING_DRIFT_VELOCITY_TRANSFER;
+      this.ball.vy += (ring.eventData.vy || 0) * CONFIG.RING_DRIFT_VELOCITY_TRANSFER;
+    }
+
     this.ball.brightenTrail();
     this._playAudio('playRingChime', this.scoreManager.streak);
     this.runRingsThreaded++;
@@ -703,6 +735,20 @@ class Game {
         this.ball.updateTrail(this.gameTime);
         this.surfaces.update(dt);
 
+        // Ring gravity well — subtle attraction when ball is near ring
+        for (const ring of this.ringManager.rings) {
+          if (!ring.active || !ring.gapRevealed) continue;
+          const dx = ring.cx - this.ball.x;
+          const dy = ring.cy - this.ball.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const wellRadius = ring.outerRadius * CONFIG.RING_GRAVITY_WELL_RADIUS;
+          if (dist > 0 && dist < wellRadius) {
+            const strength = CONFIG.RING_GRAVITY_WELL_STRENGTH * (1 - dist / wellRadius) * this.ball.scale * dt;
+            this.ball.vx += (dx / dist) * strength;
+            this.ball.vy += (dy / dist) * strength;
+          }
+        }
+
         // Ring approach audio cue
         const activeRings = this.ringManager.rings.filter(r => r.active && r.gapRevealed);
         if (activeRings.length > 0 && this.ball) {
@@ -938,6 +984,21 @@ class Game {
     }
 
     if (this.state === State.DROPPING || this.state === State.RING_HIT) {
+      // Landing predictor — subtle dot showing where ball is heading
+      if (this.ball && this.ball.alive && this.ball.vy > 0) {
+        const predX = this.ball.x + this.ball.vx * 0.3;
+        const predY = this.ball.y + this.ball.vy * 0.3 + CONFIG.GRAVITY * this.ball.scale * 0.045;
+        if (predY < gameHeight && predY > 0) {
+          ctx.save();
+          ctx.globalAlpha = 0.08;
+          ctx.fillStyle = CONFIG.BALL_COLOR;
+          ctx.beginPath();
+          ctx.arc(predX, predY, 3 * scale, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+
       this.ui.renderScore(ctx, gameWidth, gameHeight, scale, this.scoreManager);
       // Bounce multiplier preview
       this.ui.renderBounceMultiplier(ctx, this.ball, scale, this.scoreManager.bounceCount);
@@ -1087,13 +1148,21 @@ class Game {
     const agentSpeed = (window.BounceAgent && window.BounceAgent.speedMultiplier) || 1;
     delta *= agentSpeed;
 
-    delta = Math.min(delta, 6 * PHYSICS_STEP);
+    // Cap delta to prevent spiral of death after tab switch or long pause
+    delta = Math.min(delta, CONFIG.MAX_PHYSICS_CATCHUP * PHYSICS_STEP);
     this.accumulated += delta;
 
-    while (this.accumulated >= PHYSICS_STEP) {
+    // Fixed timestep with max catchup to prevent freezing
+    let ticks = 0;
+    while (this.accumulated >= PHYSICS_STEP && ticks < CONFIG.MAX_PHYSICS_CATCHUP) {
       this.gameTime += PHYSICS_STEP;
       this.updatePhysics(PHYSICS_STEP);
       this.accumulated -= PHYSICS_STEP;
+      ticks++;
+    }
+    // Discard remaining accumulated time to prevent spiral
+    if (this.accumulated > PHYSICS_STEP) {
+      this.accumulated = 0;
     }
 
     this.render();

@@ -443,18 +443,18 @@ export class UI {
   }
 
   renderParticles(ctx, scale) {
+    if (this.particles.length === 0) return;
+    ctx.save();
+    ctx.fillStyle = CONFIG.RING_COLOR;
     for (const p of this.particles) {
-      const alpha = (p.life / p.maxLife) * 0.8;
-      const radius = 2 * scale * (p.life / p.maxLife);
-
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = CONFIG.RING_COLOR;
+      const lifeRatio = p.life / p.maxLife;
+      ctx.globalAlpha = lifeRatio * 0.8;
+      const radius = 2 * scale * lifeRatio;
       ctx.beginPath();
       ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
       ctx.fill();
-      ctx.restore();
     }
+    ctx.restore();
   }
 
   renderWallImpacts(ctx, scale) {

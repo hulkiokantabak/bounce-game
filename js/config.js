@@ -236,6 +236,20 @@ export const CONFIG = {
   // Phase 4: Ring positioning — from top 1/3 downward
   RING_MIN_Y_RATIO: 0.33,
   RING_MAX_Y_RATIO: 0.85,
+
+  // Phase 5: Gameplay depth
+  SURFACE_COMBO_WINDOW: 0.4,          // seconds — place within this to get combo
+  SURFACE_COMBO_DECAY_BONUS: 0.15,    // +15% decay time per combo level
+  SURFACE_COMBO_MAX: 3,               // max combo level
+  MAX_SURFACES: 12,                   // max surfaces on screen
+  CEILING_RESTITUTION: 0.6,           // ball bouncing off top
+  RING_DRIFT_VELOCITY_TRANSFER: 0.3,  // % of ring drift velocity transferred to ball on success
+
+  // Phase 5: Physics polish
+  AIR_DRAG: 0.0004,                   // subtle air resistance at high speeds
+  RING_GRAVITY_WELL_STRENGTH: 25,     // attraction force when ball near ring
+  RING_GRAVITY_WELL_RADIUS: 1.8,      // in ring radii
+  MAX_PHYSICS_CATCHUP: 10,            // max physics ticks per frame to prevent spiral of death
 };
 
 export function hexToRgba(hex, alpha) {

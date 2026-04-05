@@ -177,8 +177,12 @@ export class SurfaceManager {
     this.surfaces = [];
   }
 
-  place(x, y, scale, round, gameWidth) {
-    const decayTime = round <= 1 ? CONFIG.SURFACE_DECAY_TIME_ROUND1 : CONFIG.SURFACE_DECAY_TIME;
+  place(x, y, scale, round, gameWidth, combo) {
+    let decayTime = round <= 1 ? CONFIG.SURFACE_DECAY_TIME_ROUND1 : CONFIG.SURFACE_DECAY_TIME;
+    // Combo bonus: rapid placement extends surface life
+    if (combo > 0) {
+      decayTime *= (1 + combo * CONFIG.SURFACE_COMBO_DECAY_BONUS);
+    }
     const lengthMult = (gameWidth && gameWidth < 400) ? CONFIG.SURFACE_LENGTH_SMALL_SCREEN_MULT : 1;
 
     // Determine surface type based on round
@@ -243,7 +247,8 @@ export class SurfaceManager {
           let restitution = ball.ballRestitution || CONFIG.BALL_RESTITUTION;
 
           if (type === 'spring') {
-            restitution = CONFIG.SURFACE_SPRING_RESTITUTION;
+            // Cap combined restitution so bouncy ball + spring doesn't go orbital
+            restitution = Math.min(CONFIG.SURFACE_SPRING_RESTITUTION, restitution + 0.35);
           } else if (type === 'ice') {
             deflectVx *= CONFIG.SURFACE_ICE_DEFLECT_MULT;
             // Ice also adds randomness
