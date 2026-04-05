@@ -920,11 +920,7 @@ class Game {
           }
         }
 
-        // Wall bounce feedback
-        if (this.ball.wallHit) {
-          this._playAudio('playWallBounce');
-          this.ui.addWallImpact(this.ball.wallHit.x, this.ball.wallHit.y);
-        }
+        // Wall bounces: zero feedback (design doc requirement)
 
         // AI hooks: send state every tick during play
         if (this.aiHooks.isConnected) {
@@ -1090,8 +1086,8 @@ class Game {
           }
         }
 
-        // Faster restart on round 1 — skip trail hold (nothing to admire)
-        const trailHold = this.scoreManager.round <= 1 ? 0.2 : CONFIG.RUN_END_TRAIL_HOLD;
+        // Shorter trail hold only on failed R1 (score 0 = nothing to admire)
+        const trailHold = (this.scoreManager.round <= 1 && this.scoreManager.score === 0) ? 0.2 : CONFIG.RUN_END_TRAIL_HOLD;
         const totalLock = CONFIG.RUN_END_PAUSE + trailHold +
           CONFIG.RUN_END_SCORE_FADE + CONFIG.RUN_END_PROMPT_DELAY;
         if (!this.runEndInputReady && this.runEndTimer >= totalLock) {

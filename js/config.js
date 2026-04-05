@@ -111,9 +111,6 @@ export const CONFIG = {
   SCORE_POP_DURATION: 0.8,
   SCORE_POP_RISE: 40,
 
-  // Ball
-  BALL_INITIAL_VX_RANGE: 40,
-
   // Ring approach glow
   RING_APPROACH_DISTANCE: 200,
   RING_GAP_INDICATOR_OPACITY: 0.15,

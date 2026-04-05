@@ -49,8 +49,9 @@ export class Ball {
     this.prevX = this.x;
     this.prevY = this.y;
 
-    // Initial velocity: small horizontal nudge so ball doesn't drop straight
-    this.vx = (Math.random() * 2 - 1) * CONFIG.BALL_INITIAL_VX_RANGE * scale;
+    // Initial velocity: always (0, 0). Gravity is the only force.
+    // Offset position provides variety — no hidden initial vx.
+    this.vx = 0;
     this.vy = 0;
 
     // Spin — affects horizontal drift
