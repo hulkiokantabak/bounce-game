@@ -272,17 +272,19 @@ export class SurfaceManager {
       const surfaceTop = surface.y - surface.halfThickness;
       const surfaceBottom = surface.y + surface.halfThickness;
 
+      // Small tolerance for floating-point edge cases
+      const eps = 0.5;
+
       // Detect overlap: ball is touching or inside the surface zone
-      const overlapping = ballBottom >= surfaceTop && ball.y < surfaceBottom + ballRadius;
+      const overlapping = ballBottom >= surfaceTop - eps && ball.y < surfaceBottom + ballRadius + eps;
 
       // Normal crossing: ball fell through surface top this frame (vy > 0)
-      const crossed = ball.vy > 0 && prevBallBottom <= surfaceTop && ballBottom >= surfaceTop;
+      const crossed = ball.vy > 0 && prevBallBottom <= surfaceTop + eps && ballBottom >= surfaceTop - eps;
 
       // One-sided: normal bounces require vy > 0 (falling).
       // Overlap ejection fires regardless of vy — prevents ball from sitting on surface.
       const isOverlapBounce = !crossed && overlapping;
       if (!crossed && !overlapping) continue;
-      if (crossed && ball.vy <= 0) continue; // should never happen but safety check
 
       {
         // Horizontal overlap (ball circle vs surface rect)

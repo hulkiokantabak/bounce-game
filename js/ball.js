@@ -62,6 +62,7 @@ export class Ball {
     this.fadeInTimer = 0;
     this.envGravityMult = 1.0;
     this.bounceImmunity = 0; // brief immunity after bounce prevents re-collision
+    this.stuckTimer = 0; // failsafe: detect ball stuck with near-zero velocity
 
     // Trail
     this.trail = [];
@@ -137,6 +138,18 @@ export class Ball {
     // Bounce immunity decay
     if (this.bounceImmunity > 0) {
       this.bounceImmunity = Math.max(0, this.bounceImmunity - dt);
+    }
+
+    // Failsafe: detect ball stuck with near-zero vertical velocity
+    // If ball barely moves vertically for 0.25s, give it an upward kick
+    if (Math.abs(this.vy) < 30 * this.scale && Math.abs(this.y - this.prevY) < 1) {
+      this.stuckTimer += dt;
+      if (this.stuckTimer > 0.25) {
+        this.vy = -CONFIG.MIN_SPEED * this.scale;
+        this.stuckTimer = 0;
+      }
+    } else {
+      this.stuckTimer = 0;
     }
 
     // Fade-in
