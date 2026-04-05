@@ -62,7 +62,7 @@ export class Settings {
     const toggles = this.overlay.querySelectorAll('.settings-toggle');
     for (const btn of toggles) {
       const key = btn.dataset.setting;
-      if (!key) continue;
+      if (!key || !Object.prototype.hasOwnProperty.call(DEFAULTS, key)) continue;
 
       // Set initial state
       this._updateToggleButton(btn, key);
@@ -204,7 +204,7 @@ export class Settings {
     ctx.textBaseline = 'middle';
 
     let label = 'settings';
-    if (this.values.aiDemo) label = 'settings · AI on';
+    if (this.values.aiDemo) label = 'settings · auto-play on';
 
     ctx.fillText(label, x, y);
 

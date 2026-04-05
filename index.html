@@ -50,35 +50,30 @@
       <div class="settings-divider"></div>
 
       <div class="settings-section">
-        <div class="settings-section-title">AI Demo</div>
+        <div class="settings-section-title">Auto-Play</div>
         <div class="settings-row">
-          <span class="settings-label">Watch AI play</span>
+          <span class="settings-label">Auto-play bot</span>
           <button class="settings-toggle" data-setting="aiDemo">OFF</button>
         </div>
-        <p class="settings-desc">Enable to watch an AI agent play the game automatically. It places surfaces to guide the ball toward the ring.</p>
+        <p class="settings-desc">A simple bot that places surfaces automatically. Tap the X to stop. Not actual AI — just a demo of the game engine.</p>
       </div>
 
       <div class="settings-divider"></div>
 
       <div class="settings-section">
-        <div class="settings-section-title">Try the AI</div>
-        <p class="settings-desc">See what the game engine can do. Close settings first, then try these:</p>
+        <div class="settings-section-title">Connect Your AI</div>
+        <p class="settings-desc">
+          Build your own AI player! Set <code>window.BOUNCE_AI</code> in the browser console to connect an LLM or bot. It receives game state every frame and can place surfaces, read ball physics, and react to events.
+        </p>
+        <p class="settings-desc" style="margin-top: 6px;">
+          Full API: <code>window.BounceAgent</code> exposes 17+ methods — start runs, place surfaces, read state, control speed.
+        </p>
         <div class="settings-tryit-list">
-          <button class="settings-tryit" data-action="startRun">Start a new run</button>
-          <button class="settings-tryit" data-action="aiDemo">Let AI play a round</button>
           <button class="settings-tryit" data-action="showState">Show game state</button>
+          <button class="settings-tryit" data-action="startRun">Start a run</button>
+          <button class="settings-tryit" data-action="aiDemo">Auto-play bot demo</button>
         </div>
         <div id="tryit-output" class="settings-tryit-output hidden"></div>
-      </div>
-
-      <div class="settings-divider"></div>
-
-      <div class="settings-section">
-        <div class="settings-section-title">Developer API</div>
-        <p class="settings-desc">
-          For developers and AI builders — 17+ methods available via <code>window.BounceAgent</code> in the browser console.
-          Connect your own AI with <code>window.BOUNCE_AI</code>.
-        </p>
       </div>
     </div>
   </div>

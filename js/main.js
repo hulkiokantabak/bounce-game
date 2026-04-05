@@ -44,8 +44,8 @@ class Game {
     this.runBounceTotal = 0;
 
     // AI demo state
-    this.aiDemoActive = false;
     this.aiDemoPlaceTimer = 0;
+    this._gravityHumActive = false;
     this.runRingsThreaded = 0;
 
     this.state = State.MENU;
@@ -160,12 +160,17 @@ class Game {
 
       case State.DROPPING:
       case State.RING_HIT:
-        // Exit button — top-left back arrow returns to menu
+        // Exit button — returns to menu, also stops AI demo
         if (this.settings.isExitTap(x, y, this.renderer.gameWidth, this.renderer.scale)) {
           this._playAudio('stopWindSound');
           this._playAudio('stopGravityHum');
           this._gravityHumActive = false;
           this.gravityPulse = false;
+          // Disable AI demo so it doesn't auto-restart
+          if (this.settings.aiDemoEnabled) {
+            this.settings.values.aiDemo = false;
+            this.settings._save();
+          }
           this.state = State.MENU;
           this.ball = null;
           this.surfaces.clear();
@@ -216,8 +221,12 @@ class Game {
         break;
 
       case State.RUN_OVER:
-        // Exit button returns to menu from run-over screen too
+        // Exit button returns to menu, stops AI demo
         if (this.settings.isExitTap(x, y, this.renderer.gameWidth, this.renderer.scale)) {
+          if (this.settings.aiDemoEnabled) {
+            this.settings.values.aiDemo = false;
+            this.settings._save();
+          }
           this.state = State.MENU;
           this.ball = null;
           this.surfaces.clear();
@@ -229,6 +238,7 @@ class Game {
           if (this.isSaveTap(x, y)) {
             this.handleSaveTap();
           } else {
+            this.leaderboard.onSaveComplete = null;
             this.startNewRun();
           }
         }
@@ -297,6 +307,11 @@ class Game {
     };
 
     this.leaderboard.onSaveComplete = () => {
+      this.leaderboard.onSaveComplete = null;
+      if (this.settings.aiDemoEnabled) {
+        this.settings.values.aiDemo = false;
+        this.settings._save();
+      }
       this.startNewRun();
     };
     // Show brief save hint for quick saves (name already set)
@@ -1384,7 +1399,7 @@ class Game {
         ctx.font = `${Math.round(10 * scale)}px monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
-        ctx.fillText('AI PLAYING', gameWidth / 2, gameHeight - 8 * scale);
+        ctx.fillText('AUTO-PLAY · tap X to stop', gameWidth / 2, gameHeight - 8 * scale);
         ctx.restore();
 
         // Show AI prediction arc brighter when demo is on
