@@ -203,7 +203,10 @@ export class Ball {
   renderTrail(ctx, currentTime) {
     if (this.trail.length < 2) return;
 
-    ctx.lineWidth = CONFIG.TRAIL_WIDTH * this.scale * (this.trailWidthMult || 1);
+    // Momentum-based trail width: faster = wider (1x to 1.5x)
+    const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+    const speedFactor = 1 + Math.min(speed / (CONFIG.MAX_SPEED * this.scale), 1) * 0.5;
+    ctx.lineWidth = CONFIG.TRAIL_WIDTH * this.scale * (this.trailWidthMult || 1) * speedFactor;
     ctx.lineCap = 'round';
 
     const color = this.trailColor || CONFIG.BALL_COLOR;
@@ -234,10 +237,10 @@ export class Ball {
     // Ball type colors
     const typeColors = {
       standard: CONFIG.BALL_COLOR,
-      heavy: '#ffbb88',
-      bouncy: '#88ffbb',
-      small: '#bbddff',
-      floaty: '#ddbbff',
+      heavy: '#ffe8d0',
+      bouncy: '#d8f5e0',
+      small: '#dde8f5',
+      floaty: '#e8ddf5',
     };
     const ballColor = typeColors[this.ballType] || CONFIG.BALL_COLOR;
 
@@ -271,6 +274,18 @@ export class Ball {
     ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
     ctx.fillStyle = ballGrad;
     ctx.fill();
+
+    // Ball type ring indicator — subtle colored ring for non-standard types
+    if (this.ballType !== 'standard') {
+      const ringColors = { heavy: '#ffcc88', bouncy: '#88eebb', small: '#99bbee', floaty: '#bb99ee' };
+      ctx.strokeStyle = ringColors[this.ballType] || '#ffffff';
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = this.opacity * 0.4;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius + 2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = this.opacity;
+    }
 
     // Spin indicator — rotating line inside ball
     if (this.spin && Math.abs(this.spin) > 0.1) {

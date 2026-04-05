@@ -90,14 +90,14 @@ class Surface {
     ctx.save();
     ctx.globalAlpha = this.opacity;
 
-    // Color by surface type
+    // Color by surface type — muted tints, still mostly white
     const typeColors = {
       normal: CONFIG.SURFACE_COLOR,
-      spring: '#66ffaa',
-      ice: '#aaddff',
-      sticky: '#ffaa66',
-      angled_left: '#ddaaff',
-      angled_right: '#ddaaff',
+      spring: '#ddffe8',
+      ice: '#ddeeff',
+      sticky: '#ffe8d8',
+      angled_left: '#eeddf8',
+      angled_right: '#eeddf8',
     };
     ctx.fillStyle = typeColors[this.surfaceType] || CONFIG.SURFACE_COLOR;
 
@@ -114,9 +114,9 @@ class Surface {
     // Type indicator marks
     if (this.surfaceType === 'spring') {
       // Zigzag line on spring
-      ctx.strokeStyle = '#33cc77';
-      ctx.lineWidth = 1;
-      ctx.globalAlpha = this.opacity * 0.6;
+      ctx.strokeStyle = '#66dd99';
+      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = this.opacity * 0.7;
       ctx.beginPath();
       const steps = 5;
       for (let i = 0; i <= steps; i++) {
@@ -127,8 +127,8 @@ class Surface {
       ctx.stroke();
     } else if (this.surfaceType === 'ice') {
       // Shimmer dots
-      ctx.fillStyle = '#ffffff';
-      ctx.globalAlpha = this.opacity * 0.3;
+      ctx.fillStyle = '#aaddff';
+      ctx.globalAlpha = this.opacity * 0.5;
       for (let i = 0; i < 3; i++) {
         const dx = left + width * (0.2 + 0.3 * i);
         ctx.beginPath();
@@ -138,9 +138,9 @@ class Surface {
     } else if (this.surfaceType === 'angled_left' || this.surfaceType === 'angled_right') {
       // Arrow indicator
       const dir = this.surfaceType === 'angled_left' ? -1 : 1;
-      ctx.strokeStyle = '#bb88ee';
-      ctx.lineWidth = 1.5;
-      ctx.globalAlpha = this.opacity * 0.5;
+      ctx.strokeStyle = '#cc99ff';
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = this.opacity * 0.6;
       const cx = this.x;
       const arrowLen = 6 * this.scale;
       ctx.beginPath();
@@ -264,9 +264,9 @@ export class SurfaceManager {
           // Reflect vy with restitution
           ball.vy = -Math.abs(ball.vy) * restitution;
 
-          // Apply spin from offset
+          // Apply spin from offset — stronger spin for more dynamic movement
           if (ball.spin !== undefined) {
-            ball.spin += offset * 3;
+            ball.spin += offset * 5;
           }
 
           // Boost to MIN_SPEED if below

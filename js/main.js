@@ -67,6 +67,10 @@ class Game {
     this.gravityPulse = false;
     this.gravityPulseTimer = 0;
 
+    // First-encounter tracking for surface/ball type hints
+    this.seenSurfaceTypes = new Set();
+    this.seenBallTypes = new Set(['standard']);
+
     // Menu constellations
     this.constellations = [];
     this.constellationsLoaded = false;
@@ -238,6 +242,14 @@ class Game {
     this.runBounceTotal = 0;
     this.runRingsThreaded = 0;
 
+    // Ball type announcement on first encounter
+    if (this.ball.ballType !== 'standard' && !this.seenBallTypes.has(this.ball.ballType)) {
+      this.seenBallTypes.add(this.ball.ballType);
+      const ballHints = { heavy: 'heavy ball!', bouncy: 'bouncy ball!', small: 'small ball!', floaty: 'floaty ball!' };
+      this.ui.triggerRoundBadge(this.scoreManager.round);
+      this.ui.showHint(ballHints[this.ball.ballType] || this.ball.ballType, this.renderer.gameWidth / 2, this.renderer.gameHeight * 0.18);
+    }
+
     // AI hooks + Agent events
     this.aiHooks.connect();
     this.aiHooks.notifyRoundStart(this.scoreManager.round);
@@ -282,6 +294,13 @@ class Game {
     // Round badge — visible on all rounds from R2+
     if (this.scoreManager.round >= 2) {
       this.ui.triggerRoundBadge(this.scoreManager.round);
+    }
+
+    // Ball type announcement on first encounter
+    if (this.ball.ballType !== 'standard' && !this.seenBallTypes.has(this.ball.ballType)) {
+      this.seenBallTypes.add(this.ball.ballType);
+      const ballHints = { heavy: 'heavy ball!', bouncy: 'bouncy ball!', small: 'small ball!', floaty: 'floaty ball!' };
+      this.ui.showHint(ballHints[this.ball.ballType] || this.ball.ballType, this.renderer.gameWidth / 2, this.renderer.gameHeight * 0.18);
     }
   }
 
@@ -607,9 +626,30 @@ class Game {
           const shakeIntensity = Math.min(speed / 600, 2.0);
           this.renderer.shake(isFirstBounce ? 2.0 : shakeIntensity);
 
+          // Type-tinted bounce flash at ball position
+          const flashColors = { spring: '#ddffe8', ice: '#ddeeff', sticky: '#ffe8d8', angled_left: '#eeddf8', angled_right: '#eeddf8' };
+          const bounceFlashColor = flashColors[this.surfaces.lastHitType] || '#ffffff';
+          this.ui.addSurfaceFlash(this.ball.x, this.ball.y, bounceFlashColor);
+
           // First-bounce encouragement on R1
           if (isFirstBounce) {
             this.ui.showHint('nice!', this.ball.x, this.ball.y - this.ball.radius - 20 * this.renderer.scale);
+          }
+
+          // First-encounter surface type hint
+          const hitType = this.surfaces.lastHitType;
+          if (hitType && hitType !== 'normal' && !this.seenSurfaceTypes.has(hitType)) {
+            this.seenSurfaceTypes.add(hitType);
+            const typeHints = {
+              spring: 'spring! extra bounce',
+              ice: 'ice! slippery',
+              sticky: 'sticky! dampened',
+              angled_left: 'angled left!',
+              angled_right: 'angled right!',
+            };
+            if (typeHints[hitType]) {
+              this.ui.showHint(typeHints[hitType], this.ball.x, this.ball.y - this.ball.radius - 35 * this.renderer.scale);
+            }
           }
 
           // AI + Agent notifications
@@ -868,8 +908,13 @@ class Game {
       // Wind indicator
       if (Math.abs(this.wind) > 5) {
         ctx.save();
-        const windAlpha = Math.min(Math.abs(this.wind) / CONFIG.WIND_STRENGTH_MAX, 1) * 0.2;
+        const windAlpha = Math.min(Math.abs(this.wind) / CONFIG.WIND_STRENGTH_MAX, 1) * 0.25;
         ctx.globalAlpha = windAlpha;
+        ctx.fillStyle = '#88ccff';
+        ctx.font = `${Math.round(9 * scale)}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText('wind', gameWidth / 2, 3 * scale);
         ctx.strokeStyle = '#88ccff';
         ctx.lineWidth = 1;
         const windDir = this.wind > 0 ? 1 : -1;
@@ -889,21 +934,27 @@ class Game {
       // Ball type indicator
       if (this.ball && this.ball.ballType !== 'standard' && this.scoreManager.round >= CONFIG.BALL_TYPE_INTRO_ROUND) {
         ctx.save();
-        ctx.globalAlpha = 0.2;
+        ctx.globalAlpha = 0.3;
         ctx.fillStyle = '#ffffff';
-        ctx.font = `${Math.round(10 * scale)}px monospace`;
+        ctx.font = `${Math.round(12 * scale)}px monospace`;
         ctx.textAlign = 'right';
         ctx.textBaseline = 'top';
         ctx.fillText(this.ball.ballType, gameWidth - 12 * scale, 20 * scale);
         ctx.restore();
       }
 
-      // Gravity pulse indicator
+      // Gravity pulse indicator + subtle screen tint
       if (this.gravityPulse) {
         ctx.save();
-        ctx.globalAlpha = 0.15 + 0.05 * Math.sin(this.gameTime * 6);
+        ctx.globalAlpha = 0.02 + 0.01 * Math.sin(this.gameTime * 4);
+        ctx.fillStyle = '#8888ff';
+        ctx.fillRect(0, 0, gameWidth, gameHeight);
+        ctx.restore();
+
+        ctx.save();
+        ctx.globalAlpha = 0.2 + 0.05 * Math.sin(this.gameTime * 6);
         ctx.fillStyle = '#aabbff';
-        ctx.font = `${Math.round(10 * scale)}px monospace`;
+        ctx.font = `${Math.round(11 * scale)}px monospace`;
         ctx.textAlign = 'right';
         ctx.textBaseline = 'top';
         ctx.fillText('low-g', gameWidth - 12 * scale, 32 * scale);

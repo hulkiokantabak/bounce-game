@@ -169,8 +169,8 @@ export class UI {
     this.scorePops.push({ x, y: y - stackOffset, text, timer: 0, isStreak, isClean });
   }
 
-  addSurfaceFlash(x, y) {
-    this.surfaceFlashes.push({ x, y, timer: 0 });
+  addSurfaceFlash(x, y, color) {
+    this.surfaceFlashes.push({ x, y, timer: 0, color: color || '#ffffff' });
   }
 
   spawnRingParticles(x, y, scale, streak) {
@@ -434,7 +434,7 @@ export class UI {
 
       ctx.save();
       ctx.globalAlpha = alpha;
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = f.color || '#ffffff';
       ctx.beginPath();
       ctx.arc(f.x, f.y, radius, 0, Math.PI * 2);
       ctx.fill();

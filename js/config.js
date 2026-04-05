@@ -186,10 +186,10 @@ export const CONFIG = {
   ROUND_BADGE_SIZE: 28,
 
   // Phase 4: Bounce dynamics
-  SURFACE_DEFLECT_STRENGTH: 0.7,     // how much offset from center affects vx
-  SURFACE_DEFLECT_MAX_VX: 400,       // max vx gained from deflection
-  BALL_SPIN_FRICTION: 0.15,          // how much spin affects vx over time
-  BALL_SPIN_DECAY: 0.92,             // spin decay per second (multiplied each frame)
+  SURFACE_DEFLECT_STRENGTH: 0.85,    // how much offset from center affects vx
+  SURFACE_DEFLECT_MAX_VX: 500,       // max vx gained from deflection
+  BALL_SPIN_FRICTION: 0.2,            // how much spin affects vx over time
+  BALL_SPIN_DECAY: 0.90,             // spin decay per second (multiplied each frame)
 
   // Phase 4: Surface types
   SURFACE_TYPES: ['normal', 'spring', 'ice', 'sticky', 'angled_left', 'angled_right'],
