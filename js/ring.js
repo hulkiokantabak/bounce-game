@@ -1,4 +1,4 @@
-import { CONFIG, hexToRgba } from './config.js';
+import { CONFIG } from './config.js';
 
 class Ring {
   constructor(cx, cy, radius, thickness, gapAngle, gapCenter, scale, isDual, isRingA) {
@@ -182,7 +182,6 @@ export class RingManager {
     this.flashing = false;
     this.isDualRound = false;
     this.ringAThreaded = false;
-    this.dualBaseScoreA = 0;
   }
 
   spawnForRound(round, gameWidth, gameHeight, scale) {

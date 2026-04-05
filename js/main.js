@@ -33,6 +33,7 @@ class Game {
     this.leaderboard = new Leaderboard();
     this.recorder = new ReplayRecorder();
     this.replayPlayer = new ReplayPlayer();
+    this.replayLoading = false;
 
     this.state = State.MENU;
     this.ball = null;
@@ -279,8 +280,11 @@ class Game {
     this.leaderboard.hide();
     this.leaderboard.onClose = prevOnClose;
     this.state = State.REPLAY;
+    this.replayLoading = true;
 
     const entry = await this.leaderboard.fetchReplayData(entryId);
+    this.replayLoading = false;
+
     if (!entry || !entry.trail_data || !entry.trail_data.ball) {
       this.state = State.MENU;
       return;
@@ -456,7 +460,18 @@ class Game {
     }
 
     if (this.state === State.REPLAY) {
-      this.replayPlayer.render(ctx, gameWidth, gameHeight, scale);
+      if (this.replayLoading) {
+        ctx.save();
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = '#ffffff';
+        ctx.font = `${Math.round(14 * scale)}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Loading replay...', gameWidth / 2, gameHeight / 2);
+        ctx.restore();
+      } else {
+        this.replayPlayer.render(ctx, gameWidth, gameHeight, scale);
+      }
       ctx.restore();
       return;
     }

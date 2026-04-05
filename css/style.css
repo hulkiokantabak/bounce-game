@@ -116,6 +116,12 @@ canvas {
   padding: 6px;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.gallery-cell:active {
+  background: rgba(255, 204, 102, 0.1);
 }
 
 .gallery-thumb {

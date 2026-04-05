@@ -1,9 +1,8 @@
-import { CONFIG, hexToRgba } from './config.js';
+import { CONFIG } from './config.js';
 
 export class Leaderboard {
   constructor() {
     this.entries = [];
-    this.loading = false;
     this.currentSort = 'score';
     this.currentTime = 'all';
     this.playerId = this.getOrCreatePlayerId();

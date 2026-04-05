@@ -85,7 +85,6 @@ export class ReplayPlayer {
     this.ballY = 0;
     this.trail = [];
     this.activeSurfaces = [];
-    this.activeRings = [];
 
     // End sequence
     this.endTimer = 0;
@@ -105,7 +104,6 @@ export class ReplayPlayer {
     this.trailFrozen = false;
     this.trail = [];
     this.activeSurfaces = [];
-    this.activeRings = [];
 
     // Pre-process ring data for playback
     this.ringStates = (trailData.rings || []).map(r => ({
