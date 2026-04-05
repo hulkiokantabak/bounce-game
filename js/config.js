@@ -312,7 +312,8 @@ export const CONFIG = {
   DANGER_ZONE_MUTATE_Y_RATIO: 0.70,
 
   // Phase 7: Ball mood shifts — temporary physics modifiers
-  MOOD_BOUNCE_TRIGGER: 8,
+  MOOD_BOUNCE_TRIGGER_MIN: 6,
+  MOOD_BOUNCE_TRIGGER_MAX: 10,
   MOOD_RING_TRIGGER: true,
   MOOD_DURATION: 2.5,
   MOOD_TYPES: ['excited', 'heavy', 'slippery', 'zen'],

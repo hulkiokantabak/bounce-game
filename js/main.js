@@ -90,6 +90,7 @@ class Game {
 
     // Mood state
     this.moodBounceCounter = 0;
+    this.moodBounceThreshold = this._rollMoodThreshold();
     this._moodOnNextRound = false;
 
     // Surface placement combo
@@ -213,10 +214,7 @@ class Game {
             window.BounceAgent._notifySurfacePlaced(x, y);
           }
 
-          // Show combo indicator for rapid placement
-          if (this.placeCombo >= 2) {
-            this.ui.showHint(`x${this.placeCombo} combo!`, x, y - 20 * this.renderer.scale);
-          }
+          // Combo extends surface life silently — no hint needed
         }
         break;
 
@@ -594,6 +592,12 @@ class Game {
 
   // --- Mood triggers ---
 
+  _rollMoodThreshold() {
+    const min = CONFIG.MOOD_BOUNCE_TRIGGER_MIN;
+    const max = CONFIG.MOOD_BOUNCE_TRIGGER_MAX;
+    return min + Math.floor(Math.random() * (max - min + 1));
+  }
+
   _triggerMood() {
     if (!this.ball) return;
     const types = CONFIG.MOOD_TYPES;
@@ -916,8 +920,9 @@ class Game {
           this.runBounceTotal++;
           // Mood trigger every N bounces
           this.moodBounceCounter++;
-          if (this.moodBounceCounter >= CONFIG.MOOD_BOUNCE_TRIGGER) {
+          if (this.moodBounceCounter >= this.moodBounceThreshold) {
             this.moodBounceCounter = 0;
+            this.moodBounceThreshold = this._rollMoodThreshold();
             this._triggerMood();
           }
           const speed = Math.sqrt(this.ball.vx * this.ball.vx + this.ball.vy * this.ball.vy) / this.ball.scale;
@@ -1273,8 +1278,12 @@ class Game {
     if (this.state === State.DROPPING || this.state === State.RING_HIT) {
       // Trajectory preview — dotted arc showing predicted path
       if (this.ball && this.ball.alive && this.ball.vy > 0) {
-        const gravMult = this.ball.round <= 1 ? CONFIG.GRAVITY_ROUND1_MULT : 1.0;
-        const gravity = CONFIG.GRAVITY * this.ball.scale * this.ball.speedMult * gravMult * (this.ball.gravityMult || 1.0);
+        const roundGravMult = this.ball.round <= 1 ? CONFIG.GRAVITY_ROUND1_MULT : 1.0;
+        const ballGravMult = this.ball.gravityMult || 1.0;
+        const baseGrav = ballGravMult < 1.0 ? ballGravMult : roundGravMult * ballGravMult;
+        const envGrav = this.ball.envGravityMult !== undefined ? this.ball.envGravityMult : 1.0;
+        const totalGrav = envGrav === 0 ? 0 : Math.max(CONFIG.BALL_MIN_GRAVITY_MULT, baseGrav * envGrav);
+        const gravity = CONFIG.GRAVITY * this.ball.scale * this.ball.speedMult * totalGrav;
         let px = this.ball.x, py = this.ball.y;
         let pvx = this.ball.vx, pvy = this.ball.vy;
         const stepDt = CONFIG.TRAJECTORY_PREVIEW_STEP_DT;
@@ -1332,7 +1341,7 @@ class Game {
         ctx.restore();
       }
 
-      // Ball type indicator
+      // Ball type indicator — below exit button to avoid overlap
       if (this.ball && this.ball.ballType !== 'standard') {
         ctx.save();
         ctx.globalAlpha = 0.3;
@@ -1340,7 +1349,7 @@ class Game {
         ctx.font = `${Math.round(12 * scale)}px monospace`;
         ctx.textAlign = 'right';
         ctx.textBaseline = 'top';
-        ctx.fillText(this.ball.ballType, gameWidth - 12 * scale, 20 * scale);
+        ctx.fillText(this.ball.ballType, gameWidth - 12 * scale, 38 * scale);
         ctx.restore();
       }
 

@@ -741,22 +741,10 @@ export class UI {
       // Rounds
       ctx.globalAlpha = fadeProgress * 0.5;
       ctx.font = `${Math.round(16 * scale)}px monospace`;
-      ctx.fillText(`${scoreManager.round} rounds`, gameWidth / 2, gameHeight * 0.35 + 40 * scale);
-
-      // Longest streak
-      if (scoreManager.longestStreak >= CONFIG.STREAK_DISPLAY_THRESHOLD) {
-        ctx.fillText(`${scoreManager.longestStreak} streak`, gameWidth / 2, gameHeight * 0.35 + 65 * scale);
-      }
-
-      // Bounce count (score breakdown) — passed via extra param
-      if (CONFIG.SCORE_BREAKDOWN_SHOW_BOUNCES && this._runEndBounces > 0) {
-        ctx.globalAlpha = fadeProgress * 0.3;
-        ctx.font = `${Math.round(12 * scale)}px monospace`;
-        ctx.fillText(`${this._runEndBounces} bounces`, gameWidth / 2, gameHeight * 0.35 + 85 * scale);
-      }
+      ctx.fillText(`${scoreManager.round} ${scoreManager.round === 1 ? 'round' : 'rounds'}`, gameWidth / 2, gameHeight * 0.35 + 40 * scale);
 
       // Personal best line
-      const extraY = (CONFIG.SCORE_BREAKDOWN_SHOW_BOUNCES && this._runEndBounces > 0) ? 20 * scale : 0;
+      const extraY = 0;
       if (scoreManager.isNewPersonalBest) {
         ctx.globalAlpha = fadeProgress * 0.7;
         ctx.fillStyle = CONFIG.RING_COLOR;

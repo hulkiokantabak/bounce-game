@@ -239,7 +239,7 @@ export class Settings {
     const size = 8 * scale;
 
     ctx.save();
-    ctx.globalAlpha = 0.2;
+    ctx.globalAlpha = 0.35;
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 1.5 * scale;
     ctx.lineCap = 'round';
@@ -258,7 +258,7 @@ export class Settings {
   isExitTap(x, y, gameWidth, scale) {
     const ex = gameWidth - 20 * scale;
     const ey = 18 * scale;
-    const hitSize = 25 * scale;
+    const hitSize = 35 * scale;
     return x > ex - hitSize && x < ex + hitSize &&
            y > ey - hitSize && y < ey + hitSize;
   }
