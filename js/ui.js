@@ -3,10 +3,34 @@ import { CONFIG } from './config.js';
 export class UI {
   constructor() {
     this.menuPulseTime = 0;
+    this.scorePops = [];
+    this.pbFlashTimer = 0;
   }
 
   updateMenu(dt) {
     this.menuPulseTime += dt;
+  }
+
+  update(dt) {
+    // Update score pops
+    for (const pop of this.scorePops) {
+      pop.timer += dt;
+    }
+    this.scorePops = this.scorePops.filter(p => p.timer < CONFIG.SCORE_POP_DURATION);
+
+    // Personal best flash decay
+    if (this.pbFlashTimer > 0) {
+      this.pbFlashTimer = Math.max(0, this.pbFlashTimer - dt);
+    }
+  }
+
+  addScorePop(x, y, score, isStreak) {
+    const text = isStreak ? `+${score.toLocaleString()}` : `+${score.toLocaleString()}`;
+    this.scorePops.push({ x, y, text, timer: 0, isStreak });
+  }
+
+  triggerPBFlash() {
+    this.pbFlashTimer = 1.0;
   }
 
   renderMenu(ctx, gameWidth, gameHeight, scale, personalBest) {
@@ -78,27 +102,62 @@ export class UI {
   renderScore(ctx, gameWidth, gameHeight, scale, scoreManager) {
     const margin = 20 * scale;
 
-    // Score — top-left, monospace, white at 40%, pulse on update
+    // Score — top-left, monospace, brighter at 70%, pulse on update
     const baseSize = Math.round(18 * scale);
     const pulseExtra = scoreManager.scorePulse * Math.min(scoreManager.lastScoreGain / 100, 3) * 4 * scale;
     const size = baseSize + pulseExtra;
 
     ctx.save();
-    ctx.globalAlpha = 0.4;
-    ctx.fillStyle = '#ffffff';
+    ctx.globalAlpha = 0.7;
+
+    // Personal best flash: gold color when PB exceeded
+    if (this.pbFlashTimer > 0) {
+      ctx.fillStyle = CONFIG.RING_COLOR;
+      ctx.globalAlpha = 0.7 + 0.3 * this.pbFlashTimer;
+    } else {
+      ctx.fillStyle = '#ffffff';
+    }
+
     ctx.font = `${Math.round(size)}px monospace`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.fillText(scoreManager.score.toLocaleString(), margin, margin);
 
+    // Round indicator — subtle, below score
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `${Math.round(12 * scale)}px monospace`;
+    const roundY = margin + size + 4 * scale;
+    ctx.fillText(`R${scoreManager.round}`, margin, roundY);
+
     // Streak at threshold 3+
     if (scoreManager.streak >= CONFIG.STREAK_DISPLAY_THRESHOLD) {
       ctx.globalAlpha = 0.3;
       ctx.font = `${Math.round(13 * scale)}px monospace`;
-      ctx.fillText(`\u00d7${scoreManager.streak} streak`, margin, margin + size + 4 * scale);
+      ctx.fillText(`\u00d7${scoreManager.streak} streak`, margin + 30 * scale, roundY);
     }
 
     ctx.restore();
+
+    // Score pops
+    this.renderScorePops(ctx, scale);
+  }
+
+  renderScorePops(ctx, scale) {
+    for (const pop of this.scorePops) {
+      const progress = pop.timer / CONFIG.SCORE_POP_DURATION;
+      const alpha = 1 - progress;
+      const rise = CONFIG.SCORE_POP_RISE * scale * progress;
+
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.9;
+      ctx.fillStyle = CONFIG.RING_COLOR;
+      ctx.font = `bold ${Math.round(16 * scale)}px monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(pop.text, pop.x, pop.y - rise);
+      ctx.restore();
+    }
   }
 
   renderRunEnd(ctx, gameWidth, gameHeight, scale, scoreManager, timer) {

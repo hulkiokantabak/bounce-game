@@ -93,7 +93,7 @@ class Ring {
     this.gapRevealed = true;
   }
 
-  render(ctx) {
+  render(ctx, approachFactor) {
     if (this.shatterDone) return;
 
     if (this.shattering) {
@@ -106,7 +106,12 @@ class Ring {
     // Pulse: 60-100% opacity on arc body
     const t = this.pulseTime * CONFIG.RING_PULSE_SPEED;
     const pulse = 0.6 + 0.4 * (0.5 + 0.5 * Math.sin(t * Math.PI * 2));
-    const brightness = (this.isDual && this.isRingA) ? Math.min(pulse + 0.15, 1.0) : pulse;
+    let brightness = (this.isDual && this.isRingA) ? Math.min(pulse + 0.15, 1.0) : pulse;
+
+    // Approach glow: ring brightens as ball gets closer
+    if (approachFactor > 0) {
+      brightness = Math.min(1.0, brightness + approachFactor * 0.4);
+    }
 
     const gapStart = this.gapCenter - this.gapAngle / 2;
     const gapEnd = this.gapCenter + this.gapAngle / 2;
@@ -273,7 +278,7 @@ export class RingManager {
 
     if (this.flashing) {
       this.flashTimer += dt;
-      if (this.flashTimer > 0.2) {
+      if (this.flashTimer > 0.35) {
         this.flashing = false;
       }
     }
@@ -310,9 +315,17 @@ export class RingManager {
     }
   }
 
-  renderRings(ctx) {
+  renderRings(ctx, ball) {
     for (const ring of this.rings) {
-      ring.render(ctx);
+      let approachFactor = 0;
+      if (ball && ring.active) {
+        const dx = ball.x - ring.cx;
+        const dy = ball.y - ring.cy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const maxDist = CONFIG.RING_APPROACH_DISTANCE * (ball.scale || 1);
+        approachFactor = Math.max(0, 1 - dist / maxDist);
+      }
+      ring.render(ctx, approachFactor);
     }
   }
 
@@ -326,7 +339,7 @@ export class RingManager {
 
   renderFlash(ctx, gameWidth, gameHeight) {
     if (!this.flashing) return;
-    const flashAlpha = Math.max(0, 0.3 * (1 - this.flashTimer / 0.2));
+    const flashAlpha = Math.max(0, 0.4 * (1 - this.flashTimer / 0.35));
     ctx.save();
     ctx.globalAlpha = flashAlpha;
     ctx.fillStyle = CONFIG.RING_COLOR;

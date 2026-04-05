@@ -246,16 +246,27 @@ class Game {
     // Record ring success
     this.recorder.recordRingHit(ringIndex, this.gameTime, true);
 
+    let scoreGain = 0;
     if (this.ringManager.isDualRound) {
       if (ring.isRingA) {
         this.scoreManager.onDualRingASuccess();
       } else {
-        this.scoreManager.onDualRingBSuccess();
+        scoreGain = this.scoreManager.onDualRingBSuccess();
         this.enterRingHit();
       }
     } else {
-      this.scoreManager.onSingleRingSuccess();
+      scoreGain = this.scoreManager.onSingleRingSuccess();
       this.enterRingHit();
+    }
+
+    // Score pop at ring position
+    if (scoreGain > 0) {
+      this.ui.addScorePop(ring.cx, ring.cy, scoreGain, this.scoreManager.streak > 1);
+    }
+
+    // Check if we just exceeded personal best mid-run
+    if (this.scoreManager.score > this.scoreManager.personalBest && this.scoreManager.personalBest > 0) {
+      this.ui.triggerPBFlash();
     }
   }
 
@@ -347,6 +358,7 @@ class Game {
     this.scoreManager.update(dt);
     this.ringManager.update(dt);
     this.renderer.updateShake(dt);
+    this.ui.update(dt);
 
     switch (this.state) {
       case State.MENU:
@@ -492,7 +504,7 @@ class Game {
         this.ringManager.renderShatterOnly(ctx);
       }
     } else {
-      this.ringManager.renderRings(ctx);
+      this.ringManager.renderRings(ctx, this.ball);
     }
 
     if (!inTrailHold) {

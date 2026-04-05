@@ -16,8 +16,8 @@ export class Ball {
     this.prevX = this.x;
     this.prevY = this.y;
 
-    // Initial velocity: always (0, 0). Gravity is the only force.
-    this.vx = 0;
+    // Initial velocity: small horizontal nudge so ball doesn't drop straight
+    this.vx = (Math.random() * 2 - 1) * CONFIG.BALL_INITIAL_VX_RANGE * scale;
     this.vy = 0;
 
     this.alive = true;
