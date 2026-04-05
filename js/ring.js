@@ -122,12 +122,12 @@ class Ring {
     ctx.lineCap = 'butt';
 
     if (this.gapRevealed) {
-      // Gap direction indicator — faint dotted line pointing toward gap
+      // Gap direction indicator — dotted line pointing toward gap
       if (approachFactor < 0.5) {
-        const indicatorLen = this.radius * 2.5;
+        const indicatorLen = this.radius * CONFIG.RING_GAP_INDICATOR_LENGTH;
         const gapDirX = Math.cos(this.gapCenter);
         const gapDirY = Math.sin(this.gapCenter);
-        ctx.globalAlpha = 0.08;
+        ctx.globalAlpha = CONFIG.RING_GAP_INDICATOR_OPACITY;
         ctx.setLineDash([3, 6]);
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -214,7 +214,8 @@ export class RingManager {
     const sizeMult = this.getSizeCurve(round);
     const ringRadius = CONFIG.RING_RADIUS * scale * sizeMult;
     const thickness = CONFIG.RING_THICKNESS * scale;
-    const gapAngle = CONFIG.RING_GAP_ANGLE * (Math.PI / 180);
+    const gapAngleDeg = round <= 2 ? CONFIG.RING_GAP_ANGLE_ROUND1 : CONFIG.RING_GAP_ANGLE;
+    const gapAngle = gapAngleDeg * (Math.PI / 180);
 
     this.isDualRound = round >= CONFIG.DUAL_RING_START_ROUND &&
       (round - CONFIG.DUAL_RING_START_ROUND) % CONFIG.DUAL_RING_FREQUENCY === 0;
@@ -243,7 +244,13 @@ export class RingManager {
     const minY = Math.max(gameHeight * minYRatio, margin + gameHeight * CONFIG.DEAD_ZONE_TOP);
     const maxY = Math.min(gameHeight * maxYRatio, gameHeight * (1 - CONFIG.DEAD_ZONE_BOTTOM) - margin);
 
-    const pos = this.findPosition(minX, maxX, minY, maxY, ringRadius, this.lastPosition);
+    let pos;
+    if (round <= 1) {
+      // Round 1: center ring so it's immediately visible
+      pos = { x: gameWidth / 2, y: gameHeight * 0.6 };
+    } else {
+      pos = this.findPosition(minX, maxX, minY, maxY, ringRadius, this.lastPosition);
+    }
     this.rings.push(new Ring(pos.x, pos.y, ringRadius, thickness, gapAngle, gapCenter, scale, this.isDualRound, true));
 
     if (this.isDualRound) {

@@ -1,12 +1,13 @@
 import { CONFIG } from './config.js';
 
 class Surface {
-  constructor(x, y, scale) {
+  constructor(x, y, scale, decayTime, lengthMult) {
     this.x = x;
     this.y = y;
     this.scale = scale;
-    this.halfLength = (CONFIG.SURFACE_LENGTH * scale) / 2;
+    this.halfLength = (CONFIG.SURFACE_LENGTH * scale * (lengthMult || 1)) / 2;
     this.halfThickness = (CONFIG.SURFACE_THICKNESS * scale) / 2;
+    this.decayTime = decayTime || CONFIG.SURFACE_DECAY_TIME;
 
     this.hit = false;
     this.decaying = false;
@@ -43,8 +44,8 @@ class Surface {
 
     if (this.decaying) {
       this.decayTimer += dt;
-      this.opacity = CONFIG.SURFACE_OPACITY * Math.max(0, 1 - this.decayTimer / CONFIG.SURFACE_DECAY_TIME);
-      if (this.decayTimer >= CONFIG.SURFACE_DECAY_TIME) {
+      this.opacity = CONFIG.SURFACE_OPACITY * Math.max(0, 1 - this.decayTimer / this.decayTime);
+      if (this.decayTimer >= this.decayTime) {
         this.removed = true;
       }
     } else if (this.fading) {
@@ -86,7 +87,7 @@ class Surface {
 
     // Cracks from impact point
     if (this.hit && this.cracks.length > 0) {
-      const growth = Math.min(this.decayTimer / (CONFIG.SURFACE_DECAY_TIME * 0.4), 1);
+      const growth = Math.min(this.decayTimer / (this.decayTime * 0.4), 1);
       ctx.strokeStyle = CONFIG.SURFACE_COLOR;
       ctx.lineWidth = 1;
 
@@ -111,8 +112,10 @@ export class SurfaceManager {
     this.surfaces = [];
   }
 
-  place(x, y, scale) {
-    this.surfaces.push(new Surface(x, y, scale));
+  place(x, y, scale, round, gameWidth) {
+    const decayTime = round <= 1 ? CONFIG.SURFACE_DECAY_TIME_ROUND1 : CONFIG.SURFACE_DECAY_TIME;
+    const lengthMult = (gameWidth && gameWidth < 400) ? CONFIG.SURFACE_LENGTH_SMALL_SCREEN_MULT : 1;
+    this.surfaces.push(new Surface(x, y, scale, decayTime, lengthMult));
   }
 
   update(dt) {

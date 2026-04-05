@@ -173,18 +173,22 @@ export class UI {
     ctx.textBaseline = 'top';
     ctx.fillText(scoreManager.score.toLocaleString(), margin, margin);
 
-    // Round indicator — subtle, below score
-    ctx.globalAlpha = 0.25;
-    ctx.fillStyle = '#ffffff';
-    ctx.font = `${Math.round(12 * scale)}px monospace`;
+    // Round indicator — hidden on rounds 1-2 to reduce noise for beginners
     const roundY = margin + size + 4 * scale;
-    ctx.fillText(`R${scoreManager.round}`, margin, roundY);
+    if (scoreManager.round >= 3) {
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `${Math.round(12 * scale)}px monospace`;
+      ctx.fillText(`R${scoreManager.round}`, margin, roundY);
+    }
 
     // Streak at threshold 3+
     if (scoreManager.streak >= CONFIG.STREAK_DISPLAY_THRESHOLD) {
       ctx.globalAlpha = 0.3;
+      ctx.fillStyle = '#ffffff';
       ctx.font = `${Math.round(13 * scale)}px monospace`;
-      ctx.fillText(`\u00d7${scoreManager.streak} streak`, margin + 30 * scale, roundY);
+      const streakX = scoreManager.round >= 3 ? margin + 30 * scale : margin;
+      ctx.fillText(`\u00d7${scoreManager.streak} streak`, streakX, roundY);
     }
 
     ctx.restore();

@@ -6,12 +6,13 @@ export class Ball {
     this.radius = CONFIG.BALL_RADIUS * scale;
     this.glowRadius = CONFIG.BALL_GLOW_RADIUS * scale;
     this.speedMult = speedMult;
+    this.round = round;
 
     // Spawn at top-center with random horizontal offset (widens after round 7)
     const offsetRange = round >= 8 ? CONFIG.BALL_OFFSET_WIDE : CONFIG.BALL_OFFSET_NARROW;
     const offset = (Math.random() * 2 - 1) * offsetRange * gameWidth;
     this.x = gameWidth / 2 + offset;
-    this.y = this.radius * 2;
+    this.y = gameHeight * 0.08;
 
     this.prevX = this.x;
     this.prevY = this.y;
@@ -38,8 +39,9 @@ export class Ball {
     this.prevX = this.x;
     this.prevY = this.y;
 
-    // Gravity scaled by speed curve
-    this.vy += CONFIG.GRAVITY * this.scale * this.speedMult * dt;
+    // Gravity scaled by speed curve (gentler on round 1)
+    const gravMult = this.round <= 1 ? CONFIG.GRAVITY_ROUND1_MULT : 1.0;
+    this.vy += CONFIG.GRAVITY * this.scale * this.speedMult * gravMult * dt;
 
     // Speed cap
     const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);

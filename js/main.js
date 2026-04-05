@@ -89,7 +89,7 @@ class Game {
       case State.DROPPING:
       case State.RING_HIT:
         if (!this.isInDeadZone(y)) {
-          this.surfaces.place(x, y, this.renderer.scale);
+          this.surfaces.place(x, y, this.renderer.scale, this.scoreManager.round, this.renderer.gameWidth);
           this.recorder.recordSurface(x, y, this.gameTime);
           this.audio.playPlace();
           vibrate(CONFIG.PLACE_VIBRATE);
@@ -393,11 +393,15 @@ class Game {
         this.ball.checkWalls(this.renderer.gameWidth);
 
         if (this.surfaces.checkCollision(this.ball)) {
+          const isFirstBounce = this.scoreManager.bounceCount === 0 && this.scoreManager.round <= 2;
           this.scoreManager.onBounce();
           const speed = Math.sqrt(this.ball.vx * this.ball.vx + this.ball.vy * this.ball.vy) / this.ball.scale;
           this.audio.playBounce(speed);
-          vibrate(CONFIG.BOUNCE_VIBRATE);
+          vibrate(isFirstBounce ? 30 : CONFIG.BOUNCE_VIBRATE);
           this.renderer.shake();
+          if (isFirstBounce) {
+            this.renderer.shake(); // double shake for emphasis
+          }
         }
 
         this.ball.addTrailPoint(this.gameTime);
@@ -455,7 +459,9 @@ class Game {
           }
         }
 
-        const totalLock = CONFIG.RUN_END_PAUSE + CONFIG.RUN_END_TRAIL_HOLD +
+        // Faster restart on round 1 — skip trail hold (nothing to admire)
+        const trailHold = this.scoreManager.round <= 1 ? 0.2 : CONFIG.RUN_END_TRAIL_HOLD;
+        const totalLock = CONFIG.RUN_END_PAUSE + trailHold +
           CONFIG.RUN_END_SCORE_FADE + CONFIG.RUN_END_PROMPT_DELAY;
         if (!this.runEndInputReady && this.runEndTimer >= totalLock) {
           this.runEndInputReady = true;
@@ -544,8 +550,24 @@ class Game {
 
     if (this.state === State.DROPPING || this.state === State.RING_HIT) {
       this.ui.renderScore(ctx, gameWidth, gameHeight, scale, this.scoreManager);
-      // Bounce multiplier preview near ball
-      this.ui.renderBounceMultiplier(ctx, this.ball, scale, this.scoreManager.bounceCount);
+      // Bounce multiplier preview — hide on early rounds to reduce noise
+      if (this.scoreManager.round >= 3) {
+        this.ui.renderBounceMultiplier(ctx, this.ball, scale, this.scoreManager.bounceCount);
+      }
+      // Hint text on round 1
+      if (this.scoreManager.round === 1 && this.ringManager.rings.length > 0) {
+        const ring = this.ringManager.rings[0];
+        if (ring.active) {
+          ctx.save();
+          ctx.globalAlpha = 0.2;
+          ctx.fillStyle = '#ffffff';
+          ctx.font = `${Math.round(12 * scale)}px monospace`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText('thread the ring', ring.cx, ring.cy - ring.radius - 10 * scale);
+          ctx.restore();
+        }
+      }
     }
 
     if (isRunOver) {
