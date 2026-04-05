@@ -11,6 +11,7 @@ export class Leaderboard {
 
     this.onClose = null;
     this.onSaveComplete = null;
+    this.onReplayRequest = null;
     this.pendingRunData = null;
 
     this.createGalleryDOM();
@@ -200,7 +201,9 @@ export class Leaderboard {
     });
 
     if (!res.ok) throw new Error('Fetch failed');
-    return res.json();
+    const data = await res.json();
+    if (!Array.isArray(data)) return [];
+    return data;
   }
 
   renderGrid() {
@@ -217,15 +220,44 @@ export class Leaderboard {
     }
 
     empty.classList.add('hidden');
-    grid.innerHTML = this.entries.map(entry => `
-      <div class="gallery-cell">
-        ${entry.trail_image
-          ? `<img class="gallery-thumb" src="${entry.trail_image}" alt="">`
-          : '<div class="gallery-thumb-empty"></div>'}
-        <span class="cell-score">${entry.score.toLocaleString()}</span>
-        <span class="cell-name">${this.escapeHtml(entry.player_name)}</span>
-      </div>
-    `).join('');
+    grid.innerHTML = '';
+    for (const entry of this.entries) {
+      const cell = document.createElement('div');
+      cell.className = 'gallery-cell';
+
+      if (entry.trail_image && this.isValidImageData(entry.trail_image)) {
+        const img = document.createElement('img');
+        img.className = 'gallery-thumb';
+        img.src = entry.trail_image;
+        img.alt = '';
+        cell.appendChild(img);
+      } else {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'gallery-thumb-empty';
+        cell.appendChild(placeholder);
+      }
+
+      const scoreSpan = document.createElement('span');
+      scoreSpan.className = 'cell-score';
+      scoreSpan.textContent = (typeof entry.score === 'number' ? entry.score : 0).toLocaleString();
+      cell.appendChild(scoreSpan);
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'cell-name';
+      nameSpan.textContent = entry.player_name || 'Anonymous';
+      cell.appendChild(nameSpan);
+
+      // Replay tap — store entry id for on-demand fetch
+      if (entry.id) {
+        cell.dataset.entryId = entry.id;
+        cell.style.cursor = 'pointer';
+        cell.addEventListener('click', () => {
+          if (this.onReplayRequest) this.onReplayRequest(entry.id);
+        });
+      }
+
+      grid.appendChild(cell);
+    }
   }
 
   showEmpty() {
@@ -257,7 +289,7 @@ export class Leaderboard {
 
   async confirmSave() {
     const input = this.nameOverlay.querySelector('#player-name');
-    const name = input.value.trim() || 'Anonymous';
+    const name = this.sanitizeName(input.value);
     this.setPlayerName(name);
 
     if (this.pendingRunData && this.isConfigured && this.canSubmit()) {
@@ -272,7 +304,7 @@ export class Leaderboard {
         longest_streak: data.longestStreak,
         duration: Math.round(data.duration * 100) / 100,
         trail_image: thumbnail,
-        trail_data: { ball: [], surfaces: [], rings: [] },
+        trail_data: data.trailData || { ball: [], surfaces: [], rings: [] },
       });
     }
 
@@ -345,9 +377,49 @@ export class Leaderboard {
 
   // --- Util ---
 
-  escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+  isValidImageData(url) {
+    if (typeof url !== 'string') return false;
+    // Only allow data:image/ URIs (generated thumbnails) and https URLs
+    if (url.startsWith('data:image/')) return true;
+    try {
+      const parsed = new URL(url);
+      return parsed.protocol === 'https:';
+    } catch {
+      return false;
+    }
+  }
+
+  sanitizeName(name) {
+    if (typeof name !== 'string') return 'Anonymous';
+    // Strip control characters, trim, enforce length
+    const cleaned = name.replace(/[\x00-\x1f\x7f]/g, '').trim();
+    if (cleaned.length === 0) return 'Anonymous';
+    return cleaned.substring(0, 20);
+  }
+
+  // --- Replay fetch (on-demand, full entry with trail_data) ---
+
+  async fetchReplayData(entryId) {
+    if (!this.isConfigured) return null;
+    try {
+      const url = new URL(`${CONFIG.SUPABASE_URL}/rest/v1/bounce_runs`);
+      url.searchParams.set('select', '*');
+      url.searchParams.set('id', `eq.${entryId}`);
+      url.searchParams.set('limit', '1');
+
+      const res = await fetch(url, {
+        headers: {
+          'apikey': CONFIG.SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
+        },
+      });
+
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (!Array.isArray(data) || data.length === 0) return null;
+      return data[0];
+    } catch {
+      return null;
+    }
   }
 }

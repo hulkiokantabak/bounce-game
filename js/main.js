@@ -8,6 +8,7 @@ import { RingManager } from './ring.js';
 import { ScoreManager } from './score.js';
 import { AudioManager, vibrate } from './audio.js';
 import { Leaderboard } from './leaderboard.js';
+import { ReplayRecorder, ReplayPlayer } from './replay.js';
 
 const State = {
   MENU: 'MENU',
@@ -15,6 +16,7 @@ const State = {
   RING_HIT: 'RING_HIT',
   RUN_OVER: 'RUN_OVER',
   LEADERBOARD: 'LEADERBOARD',
+  REPLAY: 'REPLAY',
 };
 
 const PHYSICS_STEP = 1 / 120;
@@ -29,6 +31,8 @@ class Game {
     this.scoreManager = new ScoreManager();
     this.audio = new AudioManager();
     this.leaderboard = new Leaderboard();
+    this.recorder = new ReplayRecorder();
+    this.replayPlayer = new ReplayPlayer();
 
     this.state = State.MENU;
     this.ball = null;
@@ -45,7 +49,15 @@ class Game {
     this.runEndInputReady = false;
     this.runDuration = 0;
 
+    // Menu constellations
+    this.constellations = [];
+    this.constellationsLoaded = false;
+    this.fetchConstellations();
+
     this.input.onTap = (x, y) => this.handleTap(x, y);
+
+    // Leaderboard replay callback
+    this.leaderboard.onReplayRequest = (entryId) => this.startReplay(entryId);
 
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
@@ -77,6 +89,7 @@ class Game {
       case State.RING_HIT:
         if (!this.isInDeadZone(y)) {
           this.surfaces.place(x, y, this.renderer.scale);
+          this.recorder.recordSurface(x, y, this.gameTime);
           this.audio.playPlace();
           vibrate(CONFIG.PLACE_VIBRATE);
         }
@@ -91,6 +104,38 @@ class Game {
           }
         }
         break;
+
+      case State.LEADERBOARD:
+        // Handled by gallery DOM events
+        break;
+
+      case State.REPLAY:
+        this.handleReplayTap(x, y);
+        break;
+    }
+  }
+
+  handleReplayTap(x, y) {
+    const { gameWidth, gameHeight, scale } = this.renderer;
+    const margin = 16 * scale;
+    const controlSize = 30 * scale;
+
+    // Play/pause — top-left area
+    if (x < margin + controlSize && y < margin + controlSize) {
+      this.replayPlayer.togglePlay();
+      return;
+    }
+
+    // Speed — top-right area
+    if (x > gameWidth - margin - controlSize && y < margin + controlSize) {
+      this.replayPlayer.cycleSpeed();
+      return;
+    }
+
+    // If replay finished, tap anywhere to return
+    if (this.replayPlayer.finished) {
+      this.state = State.MENU;
+      this.fetchConstellations();
     }
   }
 
@@ -116,6 +161,7 @@ class Game {
       longestStreak: this.scoreManager.longestStreak,
       duration: this.runDuration,
       trail: this.ball ? this.ball.trail : [],
+      trailData: this.recorder.getData(),
       gameWidth: this.renderer.gameWidth,
       gameHeight: this.renderer.gameHeight,
     };
@@ -133,9 +179,16 @@ class Game {
     this.scoreManager.nextRound();
 
     const { gameWidth, gameHeight, scale } = this.renderer;
+    this.recorder.start(gameWidth, gameHeight);
+
     const speedMult = this.ringManager.getSpeedCurve(this.scoreManager.round);
     this.ball = new Ball(gameWidth, gameHeight, scale, this.scoreManager.round, speedMult);
     this.ringManager.spawnForRound(this.scoreManager.round, gameWidth, gameHeight, scale);
+
+    // Record initial ring spawns
+    for (let i = 0; i < this.ringManager.rings.length; i++) {
+      this.recorder.recordRingSpawn(this.ringManager.rings[i], 0, i);
+    }
 
     this.state = State.DROPPING;
     this.gameTime = 0;
@@ -151,6 +204,11 @@ class Game {
     const speedMult = this.ringManager.getSpeedCurve(this.scoreManager.round);
     this.ball = new Ball(gameWidth, gameHeight, scale, this.scoreManager.round, speedMult);
     this.ringManager.spawnForRound(this.scoreManager.round, gameWidth, gameHeight, scale);
+
+    // Record ring spawns for new round
+    for (let i = 0; i < this.ringManager.rings.length; i++) {
+      this.recorder.recordRingSpawn(this.ringManager.rings[i], this.gameTime, i);
+    }
 
     this.state = State.DROPPING;
   }
@@ -184,6 +242,9 @@ class Game {
     this.audio.playRingChime();
     vibrate(CONFIG.RING_VIBRATE);
 
+    // Record ring success
+    this.recorder.recordRingHit(ringIndex, this.gameTime, true);
+
     if (this.ringManager.isDualRound) {
       if (ring.isRingA) {
         this.scoreManager.onDualRingASuccess();
@@ -199,6 +260,8 @@ class Game {
 
   handleRingArc(result) {
     result.ring.startShatter(result.collisionX, result.collisionY);
+    // Record ring failure
+    this.recorder.recordRingHit(result.ringIndex, this.gameTime, false);
     this.endRun('ring_kill');
   }
 
@@ -206,6 +269,71 @@ class Game {
     this.state = State.RING_HIT;
     this.ringHitTimer = 0;
   }
+
+  // --- Replay ---
+
+  async startReplay(entryId) {
+    this.leaderboard.hide();
+    this.state = State.REPLAY;
+
+    const entry = await this.leaderboard.fetchReplayData(entryId);
+    if (!entry || !entry.trail_data || !entry.trail_data.ball) {
+      this.state = State.MENU;
+      return;
+    }
+
+    const { gameWidth, gameHeight } = this.renderer;
+    this.replayPlayer.load(entry.trail_data, entry.duration || 30, gameWidth, gameHeight);
+  }
+
+  // --- Menu Constellations ---
+
+  async fetchConstellations() {
+    if (!this.leaderboard.isConfigured) {
+      this.constellations = [];
+      this.constellationsLoaded = true;
+      return;
+    }
+
+    try {
+      const url = new URL(`${CONFIG.SUPABASE_URL}/rest/v1/bounce_runs`);
+      url.searchParams.set('select', 'trail_image');
+      url.searchParams.set('order', 'created_at.desc');
+      url.searchParams.set('limit', String(CONFIG.MENU_TRAIL_COUNT));
+
+      const res = await fetch(url, {
+        headers: {
+          'apikey': CONFIG.SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
+        },
+      });
+
+      if (!res.ok) { this.constellations = []; return; }
+      const data = await res.json();
+      if (!Array.isArray(data)) { this.constellations = []; return; }
+
+      this.constellations = [];
+      for (const entry of data) {
+        if (entry.trail_image && typeof entry.trail_image === 'string' && entry.trail_image.startsWith('data:image/')) {
+          const img = new Image();
+          img.src = entry.trail_image;
+          this.constellations.push({
+            img,
+            x: 0.15 + Math.random() * 0.7,
+            y: 0.1 + Math.random() * 0.5,
+            drift: (Math.random() - 0.5) * CONFIG.MENU_TRAIL_DRIFT_SPEED,
+            driftY: (Math.random() - 0.5) * CONFIG.MENU_TRAIL_DRIFT_SPEED * 0.3,
+          });
+        }
+      }
+      this.constellationsLoaded = true;
+    } catch {
+      this.constellations = [];
+      this.constellationsLoaded = true;
+    }
+  }
+
+  // --- Physics ---
 
   updatePhysics(dt) {
     this.scoreManager.update(dt);
@@ -215,6 +343,14 @@ class Game {
     switch (this.state) {
       case State.MENU:
         this.ui.updateMenu(dt);
+        // Drift constellations
+        for (const c of this.constellations) {
+          c.x += c.drift * dt * 0.01;
+          c.y += c.driftY * dt * 0.01;
+          // Wrap around
+          if (c.x < -0.1) c.x = 1.1;
+          if (c.x > 1.1) c.x = -0.1;
+        }
         break;
 
       case State.DROPPING:
@@ -232,6 +368,10 @@ class Game {
         }
 
         this.ball.addTrailPoint(this.gameTime);
+        // Record ball position for replay (at same sample rate as trail)
+        if (this.ball.trailCounter % CONFIG.REPLAY_SAMPLE_RATE === 0 && this.ball.alive) {
+          this.recorder.recordBall(this.ball.x, this.ball.y, this.gameTime);
+        }
         this.ball.updateTrail(this.gameTime);
         this.surfaces.update(dt);
 
@@ -284,6 +424,13 @@ class Game {
           this.runEndInputReady = true;
         }
         break;
+
+      case State.REPLAY:
+        this.replayPlayer.update(dt);
+        if (this.replayPlayer.finished) {
+          // Stay in REPLAY state — tap to exit handled in handleReplayTap
+        }
+        break;
     }
   }
 
@@ -297,7 +444,15 @@ class Game {
     this.renderer.clear();
 
     if (this.state === State.MENU || this.state === State.LEADERBOARD) {
+      // Render constellations behind menu
+      this.renderConstellations(ctx, gameWidth, gameHeight);
       this.ui.renderMenu(ctx, gameWidth, gameHeight, scale, this.scoreManager.personalBest);
+      ctx.restore();
+      return;
+    }
+
+    if (this.state === State.REPLAY) {
+      this.replayPlayer.render(ctx, gameWidth, gameHeight, scale);
       ctx.restore();
       return;
     }
@@ -337,6 +492,24 @@ class Game {
 
     if (isRunOver) {
       this.ui.renderRunEnd(ctx, gameWidth, gameHeight, scale, this.scoreManager, this.runEndTimer);
+    }
+
+    ctx.restore();
+  }
+
+  renderConstellations(ctx, gameWidth, gameHeight) {
+    if (this.constellations.length === 0) return;
+
+    const size = CONFIG.TRAIL_THUMBNAIL_SIZE;
+
+    ctx.save();
+    ctx.globalAlpha = CONFIG.MENU_TRAIL_OPACITY;
+
+    for (const c of this.constellations) {
+      if (!c.img.complete || !c.img.naturalWidth) continue;
+      const drawX = c.x * gameWidth - size / 2;
+      const drawY = c.y * gameHeight - size / 2;
+      ctx.drawImage(c.img, drawX, drawY, size, size);
     }
 
     ctx.restore();
