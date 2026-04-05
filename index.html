@@ -17,6 +17,55 @@
 </head>
 <body>
   <canvas id="game"></canvas>
+
+  <!-- Settings Panel -->
+  <div id="settings-overlay" class="overlay hidden">
+    <div class="settings-panel">
+      <div class="settings-header">
+        <span class="settings-title">Settings</span>
+        <button class="settings-close">&times;</button>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-row">
+          <span class="settings-label">Sound</span>
+          <button class="settings-toggle" data-setting="sound">ON</button>
+        </div>
+        <div class="settings-row">
+          <span class="settings-label">Haptics</span>
+          <button class="settings-toggle" data-setting="haptics">ON</button>
+        </div>
+      </div>
+
+      <div class="settings-divider"></div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">AI Demo</div>
+        <div class="settings-row">
+          <span class="settings-label">Watch AI play</span>
+          <button class="settings-toggle" data-setting="aiDemo">OFF</button>
+        </div>
+        <p class="settings-desc">Enable to watch an AI agent play the game automatically. It places surfaces to guide the ball toward the ring.</p>
+      </div>
+
+      <div class="settings-divider"></div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Developer API</div>
+        <p class="settings-desc">
+          Control the game programmatically via the browser console:<br><br>
+          <code>window.BounceAgent.getState()</code><br>
+          <code>window.BounceAgent.tap(x, y)</code><br>
+          <code>window.BounceAgent.startRun()</code><br>
+          <code>window.BounceAgent.getSummary()</code><br><br>
+          Connect an AI provider:<br>
+          <code>window.BOUNCE_AI = { onGameState(s) { ... } }</code><br><br>
+          <span class="settings-link-hint">Full docs: 17+ methods for AI agents, bots, and external tools.</span>
+        </p>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="js/main.js"></script>
 </body>
 </html>

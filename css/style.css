@@ -239,3 +239,112 @@ canvas {
   border-color: rgba(255, 204, 102, 0.4);
   color: #ffcc66;
 }
+
+/* --- Settings Panel --- */
+
+.settings-panel {
+  max-width: 360px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 24px 20px;
+  padding-top: max(24px, env(safe-area-inset-top, 24px));
+  padding-bottom: max(40px, env(safe-area-inset-bottom, 40px));
+}
+
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 28px;
+}
+
+.settings-title {
+  font-size: 20px;
+  color: rgba(255, 255, 255, 0.8);
+  letter-spacing: 0.05em;
+}
+
+.settings-close {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 28px;
+  cursor: pointer;
+  opacity: 0.5;
+  line-height: 1;
+  padding: 4px 8px;
+}
+
+.settings-close:active {
+  opacity: 0.8;
+}
+
+.settings-section {
+  margin-bottom: 8px;
+}
+
+.settings-section-title {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 12px;
+}
+
+.settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+}
+
+.settings-label {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.settings-toggle {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.4);
+  font-family: monospace;
+  font-size: 12px;
+  padding: 5px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  min-width: 48px;
+  text-align: center;
+  transition: all 0.15s;
+}
+
+.settings-toggle.active {
+  background: rgba(255, 204, 102, 0.15);
+  border-color: rgba(255, 204, 102, 0.4);
+  color: #ffcc66;
+}
+
+.settings-desc {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.25);
+  line-height: 1.6;
+  margin-top: 8px;
+}
+
+.settings-desc code {
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  color: rgba(255, 204, 102, 0.7);
+}
+
+.settings-link-hint {
+  color: rgba(255, 255, 255, 0.15);
+  font-style: italic;
+}
+
+.settings-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  margin: 16px 0;
+}

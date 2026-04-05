@@ -12,6 +12,7 @@ import { ReplayRecorder, ReplayPlayer } from './replay.js';
 import { AIHooks } from './ai-hooks.js';
 import { AgentAPI } from './agent.js';
 import { LifetimeStats } from './lifetime.js';
+import { Settings } from './settings.js';
 
 const State = {
   MENU: 'MENU',
@@ -39,7 +40,12 @@ class Game {
     this.replayLoading = false;
     this.aiHooks = new AIHooks();
     this.lifetime = new LifetimeStats();
+    this.settings = new Settings();
     this.runBounceTotal = 0;
+
+    // AI demo state
+    this.aiDemoActive = false;
+    this.aiDemoPlaceTimer = 0;
     this.runRingsThreaded = 0;
 
     this.state = State.MENU;
@@ -108,11 +114,13 @@ class Game {
 
   _vibrate(pattern) {
     if (window.BounceAgent && window.BounceAgent.isSilent) return;
+    if (!this.settings.hapticsEnabled) return;
     _vibrate(pattern);
   }
 
   _playAudio(method, ...args) {
     if (window.BounceAgent && window.BounceAgent.isSilent) return;
+    if (!this.settings.soundEnabled) return;
     if (typeof this.audio[method] === 'function') {
       this.audio[method](...args);
     }
@@ -123,7 +131,10 @@ class Game {
 
     switch (this.state) {
       case State.MENU:
-        if (this.ui.isLeaderboardIconTap(x, y, this.renderer)) {
+        if (this.settings.isOpen) break; // settings panel absorbs taps
+        if (this.settings.isGearTap(x, y, this.renderer.gameWidth, this.renderer.gameHeight, this.renderer.scale)) {
+          this.settings.show(() => { /* settings closed */ });
+        } else if (this.ui.isLeaderboardIconTap(x, y, this.renderer)) {
           this.state = State.LEADERBOARD;
           this.leaderboard.onClose = () => { this.state = State.MENU; };
           this.leaderboard.show();
@@ -612,6 +623,13 @@ class Game {
     switch (this.state) {
       case State.MENU:
         this.ui.updateMenu(dt);
+        // AI demo auto-start from menu
+        if (this.settings.aiDemoEnabled && !this.settings.isOpen) {
+          this.audio.init();
+          this.startNewRun();
+          this.aiDemoPlaceTimer = 0;
+          break;
+        }
         // Drift constellations
         for (const c of this.constellations) {
           c.x += c.drift * dt * 0.01;
@@ -659,6 +677,18 @@ class Game {
 
         this.ball.update(dt);
         this.ball.checkWalls(this.renderer.gameWidth);
+
+        // AI demo auto-play — place surfaces automatically
+        if (this.settings.aiDemoEnabled && this.ball && this.ball.alive) {
+          this.aiDemoPlaceTimer += dt;
+          // Place a surface every ~0.9s when ball is clearly falling downward
+          if (this.aiDemoPlaceTimer >= 0.9 && this.ball.vy > 100 * this.ball.scale) {
+            this.aiDemoPlaceTimer = 0;
+            if (window.BounceAgent) {
+              window.BounceAgent.autoPlace();
+            }
+          }
+        }
 
         // Wall bounce feedback
         if (this.ball.wallHit) {
@@ -830,6 +860,11 @@ class Game {
         if (!this.runEndInputReady && this.runEndTimer >= totalLock) {
           this.runEndInputReady = true;
         }
+        // AI demo auto-restart
+        if (this.settings.aiDemoEnabled && this.runEndInputReady) {
+          this.startNewRun();
+          this.aiDemoPlaceTimer = 0;
+        }
         break;
 
       case State.REPLAY:
@@ -874,6 +909,9 @@ class Game {
       this.renderGhostTrails(ctx, gameWidth, gameHeight);
       this.renderConstellations(ctx, gameWidth, gameHeight);
       this.ui.renderMenu(ctx, gameWidth, gameHeight, scale, this.scoreManager.personalBest, this.lifetime);
+      // Settings gear icon (bottom-left, opposite leaderboard icon)
+      const isFirstVisit = this.lifetime.stats.totalRuns <= 1;
+      this.settings.renderGearIcon(ctx, gameWidth, gameHeight, scale, this.ui.menuPulseTime, isFirstVisit);
       ctx.restore();
       return;
     }
@@ -1113,6 +1151,41 @@ class Game {
             ctx.textAlign = 'center';
             ctx.textBaseline = 'bottom';
             ctx.fillText(hintText, ring.cx, ring.cy - ring.radius - 10 * scale);
+            ctx.restore();
+          }
+        }
+      }
+
+      // AI demo indicator
+      if (this.settings.aiDemoEnabled) {
+        const aiPulse = 0.3 + 0.15 * Math.sin(this.gameTime * 3);
+        ctx.save();
+        ctx.globalAlpha = aiPulse;
+        ctx.fillStyle = '#88ccff';
+        ctx.font = `${Math.round(10 * scale)}px monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('AI PLAYING', gameWidth / 2, gameHeight - 8 * scale);
+        ctx.restore();
+
+        // Show AI prediction arc brighter when demo is on
+        if (this.ball && this.ball.alive && this.ball.vy > 0) {
+          const rings = this.ringManager.rings.filter(r => r.active && r.gapRevealed);
+          if (rings.length > 0) {
+            const ring = rings[0];
+            const gapX = ring.cx + Math.cos(ring.gapCenter) * ring.radius;
+            const gapY = ring.cy + Math.sin(ring.gapCenter) * ring.radius;
+            // Subtle line from ball to gap target
+            ctx.save();
+            ctx.globalAlpha = 0.05;
+            ctx.strokeStyle = '#88ccff';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 8]);
+            ctx.beginPath();
+            ctx.moveTo(this.ball.x, this.ball.y);
+            ctx.lineTo(gapX, gapY);
+            ctx.stroke();
+            ctx.setLineDash([]);
             ctx.restore();
           }
         }

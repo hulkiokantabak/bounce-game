@@ -528,17 +528,26 @@ export class AgentAPI {
     const rings = g.ringManager.rings.filter(r => r.active && r.gapRevealed);
     if (rings.length === 0) return false;
     const ring = rings[0];
+    const gw = g.renderer.gameWidth;
+    const gh = g.renderer.gameHeight;
 
-    // Predict where ball will be in ~0.3s
-    const predY = ball.y + ball.vy * 0.25 + CONFIG.GRAVITY * ball.scale * 0.03;
-    const predX = ball.x + ball.vx * 0.25;
+    // Predict where ball will be in ~0.5s (further ahead for better placement)
+    const lookAhead = 0.45;
+    const gravity = CONFIG.GRAVITY * ball.scale * (ball.speedMult || 1) * (ball.gravityMult || 1);
+    const predX = ball.x + ball.vx * lookAhead;
+    const predY = ball.y + ball.vy * lookAhead + 0.5 * gravity * lookAhead * lookAhead;
 
-    // Calculate offset to nudge ball toward ring
+    // Offset surface toward ring — stronger when ball is far from ring
     const dx = ring.cx - predX;
-    const nudge = Math.sign(dx) * Math.min(Math.abs(dx) * 0.3, 30);
+    const offsetStrength = Math.min(Math.abs(dx) / gw, 0.5) * 0.6;
+    const nudge = Math.sign(dx) * offsetStrength * gw * 0.15;
 
-    const placeX = Math.max(20, Math.min(g.renderer.gameWidth - 20, predX + nudge));
-    const placeY = Math.max(g.renderer.gameHeight * 0.15, Math.min(g.renderer.gameHeight * 0.9, predY + 40));
+    // Place surface ahead of ball (below its predicted position)
+    const placeX = Math.max(30, Math.min(gw - 30, predX + nudge));
+    const placeY = Math.max(gh * 0.12, Math.min(gh * 0.88, predY + 60 * ball.scale));
+
+    // Don't place if surface would be below the ring (waste)
+    if (placeY > ring.cy + ring.outerRadius + 50) return false;
 
     return this.placeSurface(placeX, placeY);
   }
