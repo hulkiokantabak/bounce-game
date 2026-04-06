@@ -898,7 +898,7 @@ class Game {
             // Timeout — release ball regardless
             this.aiWaitingForFirstPlacement = false;
           } else {
-            this.aiPlayer.update(this.gameTime, window.BounceAgent).then(result => {
+            this.aiPlayer.update(this.gameTime, window.BounceAgent, { allowStationary: true }).then(result => {
               if (result && this.state === State.DROPPING && this.aiWaitingForFirstPlacement) {
                 this.handleTap(result.x, result.y);
                 this.aiWaitingForFirstPlacement = false;

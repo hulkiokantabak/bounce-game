@@ -113,6 +113,7 @@ export class AIPlayer {
     this.lastCallTime = 0;
     this.callInterval = 1.5;
     this.error = null;
+    this._runGen = 0; // increments each resetForRun to invalidate stale Promises
     this._load();
   }
 
@@ -187,6 +188,7 @@ export class AIPlayer {
     this.lastCallTime = -this.callInterval;
     this.thinking = false;
     this.error = null;
+    this._runGen++;
   }
 
   static getProviders() {
@@ -197,18 +199,22 @@ export class AIPlayer {
     }));
   }
 
-  async update(gameTime, agent) {
+  async update(gameTime, agent, { allowStationary = false } = {}) {
     if (!this.enabled || !this.isConfigured) return null;
     if (this.thinking) return null;
     if (gameTime - this.lastCallTime < this.callInterval) return null;
 
     const state = agent.getState();
     if (state.state !== 'DROPPING' || !state.ball) return null;
-    if (state.ball.vy <= 0) return null;
+    // Skip when ball is rising — unless we're in the waiting state (vy=0 at spawn)
+    if (!allowStationary && state.ball.vy <= 0) return null;
 
     this.lastCallTime = gameTime;
     this.thinking = true;
     this.error = null;
+
+    // Capture generation so stale Promises from prior rounds are discarded
+    const gen = this._runGen;
 
     try {
       const summary = agent.getSummary();
@@ -223,6 +229,8 @@ export class AIPlayer {
         body: req.body,
       });
 
+      if (gen !== this._runGen) { this.thinking = false; return null; } // stale
+
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
           this.error = 'Invalid API key';
@@ -234,6 +242,8 @@ export class AIPlayer {
       }
 
       const data = await response.json();
+      if (gen !== this._runGen) { this.thinking = false; return null; } // stale
+
       const text = prov.parseResponse(data);
 
       // Parse JSON coordinates from response
