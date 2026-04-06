@@ -592,10 +592,7 @@ export class AgentAPI {
     return this.placeSurface(placeX, placeY);
   }
 
-  /** Notify AI hook when player places a surface */
   _notifySurfacePlaced(x, y) {
-    if (this._game.aiHooks && this._game.aiHooks.isConnected) {
-      this._game.aiHooks._call('onSurfacePlaced', { x, y, time: this._game.gameTime });
-    }
+    // no-op — surface placement is observable via the 'bounce' event on BounceAgent
   }
 }

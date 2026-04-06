@@ -257,7 +257,7 @@ export class AIPlayer {
       const text = prov.parseResponse(data);
 
       // Parse JSON coordinates from response
-      const match = text.match(/\{\s*"x"\s*:\s*([\d.]+)\s*,\s*"y"\s*:\s*([\d.]+)\s*\}/);
+      const match = text.match(/\{\s*"x"\s*:\s*(-?[\d.]+)\s*,\s*"y"\s*:\s*(-?[\d.]+)\s*\}/);
       if (match) {
         const x = parseFloat(match[1]);
         const y = parseFloat(match[2]);

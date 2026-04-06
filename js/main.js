@@ -9,7 +9,6 @@ import { ScoreManager } from './score.js';
 import { AudioManager, vibrate as _vibrate } from './audio.js';
 import { Leaderboard } from './leaderboard.js';
 import { ReplayRecorder, ReplayPlayer } from './replay.js';
-import { AIHooks } from './ai-hooks.js';
 import { AgentAPI } from './agent.js';
 import { LifetimeStats } from './lifetime.js';
 import { Settings } from './settings.js';
@@ -39,7 +38,6 @@ class Game {
     this.recorder = new ReplayRecorder();
     this.replayPlayer = new ReplayPlayer();
     this.replayLoading = false;
-    this.aiHooks = new AIHooks();
     this.lifetime = new LifetimeStats();
     this.settings = new Settings();
     this.aiPlayer = new AIPlayer();
@@ -125,9 +123,6 @@ class Game {
         this.lastTimestamp = 0;
       }
     });
-
-    // AI hooks: try to connect to window.BOUNCE_AI if present
-    this.aiHooks.connect();
 
     // Expose Agent API for programmatic play
     window.BounceAgent = new AgentAPI(this);
@@ -414,9 +409,6 @@ class Game {
       this.aiWaitingForFirstPlacement = true;
     }
 
-    // AI hooks + Agent events
-    this.aiHooks.connect();
-    this.aiHooks.notifyRoundStart(this.scoreManager.round);
     if (window.BounceAgent) {
       window.BounceAgent._emit('roundStart', { round: this.scoreManager.round });
       window.BounceAgent._emit('stateChange', { from: 'MENU', to: 'DROPPING' });
@@ -462,7 +454,6 @@ class Game {
       this.aiWaitingForFirstPlacement = true;
     }
 
-    this.aiHooks.notifyRoundStart(this.scoreManager.round);
     if (window.BounceAgent) window.BounceAgent._emit('roundStart', { round: this.scoreManager.round });
     this.ui.triggerRoundSweep();
 
@@ -529,7 +520,6 @@ class Game {
       ringsThreaded: this.runRingsThreaded,
       totalBounces: this.runBounceTotal,
     };
-    this.aiHooks.notifyRunEnd(endData);
     if (window.BounceAgent) {
       window.BounceAgent._emit('runEnd', endData);
       window.BounceAgent._emit('stateChange', { from: 'DROPPING', to: 'RUN_OVER' });
@@ -724,7 +714,6 @@ class Game {
       round: this.scoreManager.round,
       gapProximity: result.gapProximity,
     };
-    this.aiHooks.notifyRingResult(ringResultData);
     if (window.BounceAgent) window.BounceAgent._emit('ringSuccess', ringResultData);
 
     if (scoreGain > 0) {
@@ -732,7 +721,7 @@ class Game {
       const totalRings = this.scoreManager.streak + (this.scoreManager.round - 1);
       const multIdx = Math.min(bouncesBeforeRing, CONFIG.BOUNCE_MULTIPLIERS.length - 1);
       const mult = CONFIG.BOUNCE_MULTIPLIERS[multIdx];
-      const showMult = totalRings <= 5 && mult > 1;
+      const showMult = totalRings <= 10 && mult > 1;
       this.ui.addScorePop(ring.cx, ring.cy, scoreGain, this.scoreManager.streak > 1, isClean, showMult ? mult : 0);
     }
 
@@ -794,7 +783,6 @@ class Game {
       score: 0,
       round: this.scoreManager.round,
     };
-    this.aiHooks.notifyRingResult(failData);
     if (window.BounceAgent) window.BounceAgent._emit('ringFail', failData);
 
     // Near-death: hit the arc but was close to the gap
@@ -891,7 +879,6 @@ class Game {
     this.ringManager.update(dt);
     this.renderer.updateShake(dt);
     this.ui.update(dt);
-    this.aiHooks.update(dt);
 
     switch (this.state) {
       case State.MENU:
@@ -927,6 +914,8 @@ class Game {
           if (this.aiWaitingTimer >= 1.0) {
             // Timeout — release ball regardless
             this.aiWaitingForFirstPlacement = false;
+            this.aiPlayer.error = 'response timeout';
+            this.ui.showHint('AI timeout', this.renderer.gameWidth / 2, this.renderer.gameHeight * 0.38);
           } else {
             this.aiPlayer.update(this.gameTime, window.BounceAgent, { allowStationary: true }).then(result => {
               if (result && this.state === State.DROPPING && this.aiWaitingForFirstPlacement) {
@@ -999,17 +988,6 @@ class Game {
 
         // Wall bounces: zero feedback (design doc requirement)
 
-        // AI hooks: send state every tick during play
-        if (this.aiHooks.isConnected) {
-          const aiState = this.aiHooks.buildState(this);
-          this.aiHooks.notifyState(aiState);
-          this.aiHooks.requestSurfaceHint(aiState, this.gameTime);
-          // Request mood every 2 seconds
-          if (Math.floor(this.gameTime * 0.5) !== Math.floor((this.gameTime - dt) * 0.5)) {
-            this.aiHooks.requestMood();
-          }
-        }
-
         if (this.surfaces.checkCollision(this.ball)) {
           const isFirstBounce = this.scoreManager.bounceCount === 0 && this.scoreManager.round <= 2;
           this.scoreManager.onBounce();
@@ -1064,16 +1042,15 @@ class Game {
             }
           }
 
-          // AI + Agent notifications
-          const bounceData = { x: this.ball.x, y: this.ball.y, vx: this.ball.vx, vy: this.ball.vy, speed, bounceCount: this.scoreManager.bounceCount };
-          this.aiHooks.notifyBounce(bounceData);
-          if (window.BounceAgent) window.BounceAgent._emit('bounce', bounceData);
+          if (window.BounceAgent) window.BounceAgent._emit('bounce', { x: this.ball.x, y: this.ball.y, vx: this.ball.vx, vy: this.ball.vy, speed, bounceCount: this.scoreManager.bounceCount });
         }
 
         // Speed whoosh for fast ball
-        const ballSpeed = Math.sqrt(this.ball.vx * this.ball.vx + this.ball.vy * this.ball.vy) / this.ball.scale;
-        if (ballSpeed > 500) {
-          this._playAudio('playSpeedWhoosh', ballSpeed);
+        if (this.ball.alive) {
+          const ballSpeed = Math.sqrt(this.ball.vx * this.ball.vx + this.ball.vy * this.ball.vy) / this.ball.scale;
+          if (ballSpeed > 500) {
+            this._playAudio('playSpeedWhoosh', ballSpeed);
+          }
         }
 
         this.ball.addTrailPoint(this.gameTime);
@@ -1317,58 +1294,6 @@ class Game {
     // Hints
     this.ui.renderHints(ctx, scale);
 
-    // AI overlay
-    if (this.aiHooks.isConnected) {
-      // Connection indicator — subtle blue dot top-right
-      ctx.save();
-      ctx.globalAlpha = 0.1;
-      ctx.fillStyle = '#88ccff';
-      ctx.beginPath();
-      ctx.arc(gameWidth - 12 * scale, 12 * scale, 3 * scale, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-
-      // Commentary text
-      const commentary = this.aiHooks.getCommentary();
-      if (commentary) {
-        ctx.save();
-        ctx.globalAlpha = Math.min(this.aiHooks._commentaryTimer / 0.3, 1) * 0.5;
-        ctx.fillStyle = '#88ccff';
-        ctx.font = `${Math.round(11 * scale)}px monospace`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.fillText(commentary, gameWidth / 2, 40 * scale);
-        ctx.restore();
-      }
-
-      // AI surface hint ghost
-      const hint = this.aiHooks.getSurfaceHint();
-      if (hint && (this.state === State.DROPPING || this.state === State.RING_HIT)) {
-        ctx.save();
-        ctx.globalAlpha = 0.12;
-        ctx.strokeStyle = '#88ccff';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([4, 4]);
-        const halfLen = (CONFIG.SURFACE_LENGTH * scale) / 2;
-        ctx.beginPath();
-        ctx.moveTo(hint.x - halfLen, hint.y);
-        ctx.lineTo(hint.x + halfLen, hint.y);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.restore();
-      }
-
-      // AI mood tint
-      const mood = this.aiHooks.getMood();
-      if (mood) {
-        ctx.save();
-        ctx.globalAlpha = mood.intensity;
-        ctx.fillStyle = `rgb(${mood.r},${mood.g},${mood.b})`;
-        ctx.fillRect(0, 0, gameWidth, gameHeight);
-        ctx.restore();
-      }
-    }
-
     // Ripples and bounce particles
     if (!inTrailHold) {
       this.ui.renderRipples(ctx, scale);
@@ -1402,7 +1327,7 @@ class Game {
           const fade = 1 - i / CONFIG.TRAJECTORY_PREVIEW_STEPS;
           ctx.globalAlpha = CONFIG.TRAJECTORY_PREVIEW_OPACITY * fade;
           ctx.beginPath();
-          ctx.arc(px, py, 1.5 * scale, 0, Math.PI * 2);
+          ctx.arc(px, py, 2 * scale, 0, Math.PI * 2);
           ctx.fill();
         }
         ctx.restore();
@@ -1505,7 +1430,7 @@ class Game {
         ctx.font = `${Math.round(10 * scale)}px monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
-        ctx.fillText(this.aiWaitingForFirstPlacement ? '' : (this.aiPlayer.thinking ? 'AI thinking...' : 'AI PLAYING · tap X to stop'), gameWidth / 2, gameHeight - 8 * scale);
+        ctx.fillText((this.aiWaitingForFirstPlacement || this.aiPlayer.thinking) ? 'AI thinking...' : 'AI PLAYING · tap X to stop', gameWidth / 2, gameHeight - 8 * scale);
         if (this.aiPlayer.error) {
           ctx.globalAlpha = 0.5;
           ctx.fillStyle = '#ff6666';

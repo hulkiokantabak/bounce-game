@@ -31,7 +31,7 @@ export const CONFIG = {
   // Progression — arrays must be same length
   // For rounds beyond array length, use last value
   SPEED_CURVE: [1.0, 1.0, 1.0, 1.05, 1.1, 1.15, 1.2, 1.25, 1.3, 1.35, 1.4],
-  RING_SIZE_CURVE: [1.0, 1.0, 1.0, 0.95, 0.9, 0.85, 0.8, 0.75, 0.7, 0.65, 0.6],
+  RING_SIZE_CURVE: [1.0, 1.0, 1.0, 0.98, 0.95, 0.90, 0.85, 0.80, 0.77, 0.75, 0.72],
   BALL_OFFSET_NARROW: 0.15,
   BALL_OFFSET_WIDE: 0.25,
   DUAL_RING_START_ROUND: 13,
@@ -196,7 +196,7 @@ export const CONFIG = {
   SURFACE_SPRING_RESTITUTION: 1.3,   // bouncy!
   SURFACE_ICE_DEFLECT_MULT: 2.5,     // extra sideways on ice
   SURFACE_STICKY_RESTITUTION: 0.5,   // dampens bounce
-  SURFACE_STICKY_VX_DAMP: 0.3,       // kills horizontal speed
+  SURFACE_STICKY_VX_DAMP: 0.6,       // dampens horizontal speed without trapping ball
   SURFACE_ANGLED_VX_BOOST: 250,      // angled surfaces kick ball sideways
   SURFACE_TYPE_INTRO_ROUND: 1,       // special surfaces from the start
   SURFACE_TYPE_CHANCE_BASE: 0.2,     // 20% chance of special surface at intro
@@ -261,9 +261,9 @@ export const CONFIG = {
   MAX_PHYSICS_CATCHUP: 10,            // max physics ticks per frame to prevent spiral of death
 
   // Phase 6: Trajectory preview
-  TRAJECTORY_PREVIEW_STEPS: 20,        // dotted arc steps
+  TRAJECTORY_PREVIEW_STEPS: 30,        // dotted arc steps
   TRAJECTORY_PREVIEW_STEP_DT: 0.025,   // time per step
-  TRAJECTORY_PREVIEW_OPACITY: 0.06,    // very subtle
+  TRAJECTORY_PREVIEW_OPACITY: 0.15,    // visible but not distracting
 
   // Phase 6: Ring gap glow pulse
   RING_GAP_GLOW_RADIUS: 8,            // glow around gap edges
