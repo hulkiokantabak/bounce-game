@@ -51,6 +51,10 @@ class Game {
     this._gravityHumActive = false;
     this.runRingsThreaded = 0;
 
+    // AI player waiting state — ball frozen until first API response
+    this.aiWaitingForFirstPlacement = false;
+    this.aiWaitingTimer = 0;
+
     this.state = State.MENU;
     this.ball = null;
     this.gameTime = 0;
@@ -372,8 +376,13 @@ class Game {
       this.ui.showHint(ballHints[this.ball.ballType] || this.ball.ballType, this.renderer.gameWidth / 2, this.renderer.gameHeight * 0.18);
     }
 
-    // Reset AI player timing so first call fires immediately on this run
-    if (this.aiPlayer.enabled) this.aiPlayer.resetForRun();
+    // Reset AI player timing; hold ball until first API response
+    this.aiWaitingForFirstPlacement = false;
+    this.aiWaitingTimer = 0;
+    if (this.aiPlayer.enabled) {
+      this.aiPlayer.resetForRun();
+      this.aiWaitingForFirstPlacement = true;
+    }
 
     // AI hooks + Agent events
     this.aiHooks.connect();
@@ -413,6 +422,14 @@ class Game {
       this.gravityPulse = true;
       this.gravityPulseTimer = CONFIG.GRAVITY_PULSE_DURATION;
       this.ui.showHint('low gravity!', this.renderer.gameWidth / 2, this.renderer.gameHeight * 0.2);
+    }
+
+    // Reset AI player timing; hold ball until first API response
+    this.aiWaitingForFirstPlacement = false;
+    this.aiWaitingTimer = 0;
+    if (this.aiPlayer.enabled) {
+      this.aiPlayer.resetForRun();
+      this.aiWaitingForFirstPlacement = true;
     }
 
     this.aiHooks.notifyRoundStart(this.scoreManager.round);
@@ -873,6 +890,23 @@ class Game {
 
       case State.DROPPING:
         if (!this.ball) break;
+
+        // AI waiting for first surface — freeze ball until API responds (max 1s)
+        if (this.aiWaitingForFirstPlacement) {
+          this.aiWaitingTimer += dt;
+          if (this.aiWaitingTimer >= 1.0) {
+            // Timeout — release ball regardless
+            this.aiWaitingForFirstPlacement = false;
+          } else {
+            this.aiPlayer.update(this.gameTime, window.BounceAgent).then(result => {
+              if (result && this.state === State.DROPPING && this.aiWaitingForFirstPlacement) {
+                this.handleTap(result.x, result.y);
+                this.aiWaitingForFirstPlacement = false;
+              }
+            });
+            break; // hold ball, skip all physics this tick
+          }
+        }
 
         // --- Environment: Wind ---
         if (this.scoreManager.round >= CONFIG.WIND_INTRO_ROUND) {
@@ -1425,12 +1459,22 @@ class Game {
       if (this.aiPlayer.enabled) {
         const aiPulse = 0.3 + 0.15 * Math.sin(this.gameTime * 3);
         ctx.save();
+        // Prominent centered display while waiting for first API response
+        if (this.aiWaitingForFirstPlacement) {
+          const waitPulse = 0.5 + 0.3 * Math.sin(this.gameTime * 5);
+          ctx.globalAlpha = waitPulse;
+          ctx.fillStyle = '#88ffcc';
+          ctx.font = `${Math.round(13 * scale)}px monospace`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('AI thinking...', gameWidth / 2, gameHeight * 0.38);
+        }
         ctx.globalAlpha = aiPulse;
         ctx.fillStyle = '#88ffcc';
         ctx.font = `${Math.round(10 * scale)}px monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
-        ctx.fillText(this.aiPlayer.thinking ? 'AI thinking...' : 'AI PLAYING · tap X to stop', gameWidth / 2, gameHeight - 8 * scale);
+        ctx.fillText(this.aiWaitingForFirstPlacement ? '' : (this.aiPlayer.thinking ? 'AI thinking...' : 'AI PLAYING · tap X to stop'), gameWidth / 2, gameHeight - 8 * scale);
         if (this.aiPlayer.error) {
           ctx.globalAlpha = 0.5;
           ctx.fillStyle = '#ff6666';
