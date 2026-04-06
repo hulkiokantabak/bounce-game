@@ -14,7 +14,7 @@ const PROVIDERS = {
     url: 'https://api.anthropic.com/v1/messages',
     models: [
       { id: 'claude-haiku-4-5-20251001', label: 'Haiku 4.5 (fast)' },
-      { id: 'claude-sonnet-4-5-20241022', label: 'Sonnet 4.5' },
+      { id: 'claude-sonnet-4-6', label: 'Sonnet 4.6' },
     ],
     buildRequest(apiKey, model, systemPrompt, userMsg) {
       return {
@@ -180,6 +180,13 @@ export class AIPlayer {
   stop() {
     this.enabled = false;
     this.thinking = false;
+  }
+
+  /** Call at the start of each run so the first API call fires immediately. */
+  resetForRun() {
+    this.lastCallTime = -this.callInterval;
+    this.thinking = false;
+    this.error = null;
   }
 
   static getProviders() {

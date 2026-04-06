@@ -372,6 +372,9 @@ class Game {
       this.ui.showHint(ballHints[this.ball.ballType] || this.ball.ballType, this.renderer.gameWidth / 2, this.renderer.gameHeight * 0.18);
     }
 
+    // Reset AI player timing so first call fires immediately on this run
+    if (this.aiPlayer.enabled) this.aiPlayer.resetForRun();
+
     // AI hooks + Agent events
     this.aiHooks.connect();
     this.aiHooks.notifyRoundStart(this.scoreManager.round);
@@ -1107,6 +1110,10 @@ class Game {
         if (this.settings.aiDemoEnabled && this.runEndInputReady) {
           this.startNewRun();
           this.aiDemoPlaceTimer = 0;
+        }
+        // AI player auto-restart
+        if (this.aiPlayer.enabled && this.runEndInputReady) {
+          this.startNewRun();
         }
         break;
 
