@@ -38,8 +38,8 @@ export class Renderer {
 
     // Read CSS safe-area insets for notch / Dynamic Island handling
     const cs = getComputedStyle(document.documentElement);
-    this.safeTop = parseFloat(cs.getPropertyValue('env(safe-area-inset-top)')) || 0;
-    this.safeBottom = parseFloat(cs.getPropertyValue('env(safe-area-inset-bottom)')) || 0;
+    this.safeTop = parseFloat(cs.getPropertyValue('--sat')) || 0;
+    this.safeBottom = parseFloat(cs.getPropertyValue('--sab')) || 0;
 
     this.canvas.width = Math.round(gw * dpr);
     this.canvas.height = Math.round(gh * dpr);

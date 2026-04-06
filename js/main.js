@@ -1456,8 +1456,9 @@ class Game {
         ctx.fillRect(0, 0, gameWidth, gameHeight);
         ctx.restore();
       }
-      // Progressive hint system — fades out after R3
-      if (this.scoreManager.round <= 3 && this.ringManager.rings.length > 0) {
+      // Progressive hint system — fades out after R3; suppressed during AI/bot modes
+      if (this.scoreManager.round <= 3 && this.ringManager.rings.length > 0 &&
+          !this.aiPlayer.enabled && !this.settings.aiDemoEnabled) {
         const ring = this.ringManager.rings[0];
         if (ring.active) {
           let hintText = '';
