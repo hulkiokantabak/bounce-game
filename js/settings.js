@@ -113,6 +113,11 @@ export class Settings {
 
     const providerSelect = this.overlay.querySelector('#ai-provider-select');
     const modelSelect = this.overlay.querySelector('#ai-model-select');
+    const modelRow = this.overlay.querySelector('#ai-model-row');
+    const customModelInput = this.overlay.querySelector('#ai-custom-model');
+    const customModelRow = this.overlay.querySelector('#ai-custom-model-row');
+    const customUrlInput = this.overlay.querySelector('#ai-custom-url');
+    const customUrlRow = this.overlay.querySelector('#ai-custom-url-row');
     const apiKeyInput = this.overlay.querySelector('#ai-api-key');
     const playToggle = this.overlay.querySelector('#ai-play-toggle');
     const statusEl = this.overlay.querySelector('#ai-status');
@@ -131,6 +136,15 @@ export class Settings {
     }
     providerSelect.value = aiPlayer.provider;
 
+    // Show/hide custom provider fields
+    const updateCustomVisibility = () => {
+      const isCustom = aiPlayer.provider === 'custom';
+      if (modelRow) modelRow.hidden = isCustom;
+      if (customModelRow) customModelRow.hidden = !isCustom;
+      if (customUrlRow) customUrlRow.hidden = !isCustom;
+    };
+    updateCustomVisibility();
+
     // Populate model dropdown for current provider
     const populateModels = () => {
       modelSelect.innerHTML = '';
@@ -147,19 +161,49 @@ export class Settings {
     };
     populateModels();
 
-    // Load stored key into input
+    // Load stored values into inputs
     if (aiPlayer.apiKey) apiKeyInput.value = aiPlayer.apiKey;
+    if (customUrlInput && aiPlayer.customUrl) customUrlInput.value = aiPlayer.customUrl;
+    if (customModelInput && aiPlayer.provider === 'custom' && aiPlayer.modelId !== 'custom') {
+      customModelInput.value = aiPlayer.modelId;
+    }
 
     // Provider change
     providerSelect.addEventListener('change', () => {
       aiPlayer.setProvider(providerSelect.value);
       populateModels();
+      updateCustomVisibility();
     });
 
-    // Model change
+    // Model change (standard dropdown)
     modelSelect.addEventListener('change', () => {
       aiPlayer.setModel(modelSelect.value);
     });
+
+    // Custom model name input
+    if (customModelInput) {
+      const saveCustomModel = () => {
+        const val = customModelInput.value.trim();
+        if (val) aiPlayer.setModel(val);
+        this._updateAIStatus(statusEl);
+      };
+      customModelInput.addEventListener('blur', saveCustomModel);
+      customModelInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { saveCustomModel(); customModelInput.blur(); }
+      });
+    }
+
+    // Custom base URL input
+    if (customUrlInput) {
+      const saveCustomUrl = () => {
+        aiPlayer.setCustomUrl(customUrlInput.value);
+        this._updateAIStatus(statusEl);
+      };
+      customUrlInput.addEventListener('blur', saveCustomUrl);
+      customUrlInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { saveCustomUrl(); customUrlInput.blur(); }
+      });
+    }
 
     // API key save
     const saveKey = () => {
@@ -206,7 +250,9 @@ export class Settings {
     } else if (ai.enabled) {
       el.textContent = 'AI is playing. Tap X to stop.';
     } else if (ai.isConfigured) {
-      el.textContent = 'Key saved. Toggle ON to let AI play.';
+      el.textContent = 'Ready. Toggle ON to let AI play.';
+    } else if (ai.provider === 'custom') {
+      el.textContent = 'Enter a base URL and model name.';
     } else {
       el.textContent = '';
     }
