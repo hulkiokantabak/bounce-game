@@ -343,10 +343,11 @@ export class Settings {
 
   // --- Exit button during gameplay ---
 
-  renderExitButton(ctx, gameWidth, gameHeight, scale) {
-    // Top-right corner — away from score (top-left)
+  renderExitButton(ctx, gameWidth, gameHeight, scale, safeTop) {
+    // Top-right corner — offset by safe area for notch/Dynamic Island
+    const notchOffset = safeTop || 0;
     const x = gameWidth - 28 * scale;
-    const y = 28 * scale;
+    const y = 28 * scale + notchOffset;
     const size = 10 * scale;
 
     ctx.save();
@@ -366,9 +367,10 @@ export class Settings {
     ctx.restore();
   }
 
-  isExitTap(x, y, gameWidth, scale) {
+  isExitTap(x, y, gameWidth, scale, safeTop) {
+    const notchOffset = safeTop || 0;
     const ex = gameWidth - 28 * scale;
-    const ey = 28 * scale;
+    const ey = 28 * scale + notchOffset;
     const hitSize = 50 * scale;
     return x > ex - hitSize && x < ex + hitSize &&
            y > ey - hitSize && y < ey + hitSize;

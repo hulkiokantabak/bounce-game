@@ -1,5 +1,12 @@
 import { CONFIG } from './config.js';
 
+/** Fetch with timeout — prevents hanging on bad mobile connections */
+function fetchWithTimeout(url, opts = {}, ms = 8000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return fetch(url, { ...opts, signal: controller.signal }).finally(() => clearTimeout(timer));
+}
+
 export class Leaderboard {
   constructor() {
     this.entries = [];
@@ -193,7 +200,7 @@ export class Leaderboard {
     url.searchParams.set('order', sortMap[this.currentSort] || 'score.desc');
     url.searchParams.set('limit', '50');
 
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
       headers: {
         'apikey': CONFIG.SUPABASE_ANON_KEY,
         'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
@@ -381,7 +388,7 @@ export class Leaderboard {
     this.lastSubmitTime = Date.now();
 
     try {
-      await fetch(`${CONFIG.SUPABASE_URL}/rest/v1/bounce_runs`, {
+      await fetchWithTimeout(`${CONFIG.SUPABASE_URL}/rest/v1/bounce_runs`, {
         method: 'POST',
         headers: {
           'apikey': CONFIG.SUPABASE_ANON_KEY,

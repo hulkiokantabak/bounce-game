@@ -402,8 +402,8 @@ export class UI {
            y > iconY - hitSize && y < iconY + hitSize;
   }
 
-  renderScore(ctx, gameWidth, gameHeight, scale, scoreManager) {
-    const margin = 20 * scale;
+  renderScore(ctx, gameWidth, gameHeight, scale, scoreManager, safeTop) {
+    const margin = 20 * scale + (safeTop || 0);
 
     // Score — top-left, monospace, brighter at 70%, pulse on update
     const baseSize = Math.round(18 * scale);

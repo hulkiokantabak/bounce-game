@@ -36,6 +36,11 @@ export class Renderer {
     this.gameHeight = gh;
     this.scale = Math.min(gw, gh) / 375;
 
+    // Read CSS safe-area insets for notch / Dynamic Island handling
+    const cs = getComputedStyle(document.documentElement);
+    this.safeTop = parseFloat(cs.getPropertyValue('env(safe-area-inset-top)')) || 0;
+    this.safeBottom = parseFloat(cs.getPropertyValue('env(safe-area-inset-bottom)')) || 0;
+
     this.canvas.width = Math.round(gw * dpr);
     this.canvas.height = Math.round(gh * dpr);
     this.canvas.style.width = gw + 'px';

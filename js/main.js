@@ -169,7 +169,7 @@ class Game {
       case State.DROPPING:
       case State.RING_HIT:
         // Exit button — returns to menu, also stops AI demo
-        if (this.settings.isExitTap(x, y, this.renderer.gameWidth, this.renderer.scale)) {
+        if (this.settings.isExitTap(x, y, this.renderer.gameWidth, this.renderer.scale, this.renderer.safeTop)) {
           this._playAudio('stopWindSound');
           this._playAudio('stopGravityHum');
           this._gravityHumActive = false;
@@ -236,7 +236,7 @@ class Game {
 
       case State.RUN_OVER:
         // Exit button returns to menu, stops AI demo
-        if (this.settings.isExitTap(x, y, this.renderer.gameWidth, this.renderer.scale)) {
+        if (this.settings.isExitTap(x, y, this.renderer.gameWidth, this.renderer.scale, this.renderer.safeTop)) {
           if (this.settings.aiDemoEnabled) {
             this.settings.values.aiDemo = false;
             this.settings._save();
@@ -798,12 +798,15 @@ class Game {
       url.searchParams.set('order', 'created_at.desc');
       url.searchParams.set('limit', String(CONFIG.MENU_TRAIL_COUNT));
 
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
       const res = await fetch(url, {
         headers: {
           'apikey': CONFIG.SUPABASE_ANON_KEY,
           'Authorization': `Bearer ${CONFIG.SUPABASE_ANON_KEY}`,
         },
-      });
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timer));
 
       if (!res.ok) { this.constellations = []; return; }
       const data = await res.json();
@@ -1334,12 +1337,12 @@ class Game {
         ctx.restore();
       }
 
-      this.ui.renderScore(ctx, gameWidth, gameHeight, scale, this.scoreManager);
+      this.ui.renderScore(ctx, gameWidth, gameHeight, scale, this.scoreManager, this.renderer.safeTop);
       // Bounce multiplier preview
       this.ui.renderBounceMultiplier(ctx, this.ball, scale, this.scoreManager.bounceCount);
 
       // Exit button — back arrow top-left
-      this.settings.renderExitButton(ctx, gameWidth, gameHeight, scale);
+      this.settings.renderExitButton(ctx, gameWidth, gameHeight, scale, this.renderer.safeTop);
 
       // Wind indicator — arrows only, no text label
       if (Math.abs(this.wind) > 5) {
@@ -1469,7 +1472,7 @@ class Game {
       this.ui._runEndBounces = this.runBounceTotal;
       this.ui.renderRunEnd(ctx, gameWidth, gameHeight, scale, this.scoreManager, this.runEndTimer, this.lifetime, this.runDuration);
       // Exit button on run-over screen
-      this.settings.renderExitButton(ctx, gameWidth, gameHeight, scale);
+      this.settings.renderExitButton(ctx, gameWidth, gameHeight, scale, this.renderer.safeTop);
     }
 
     ctx.restore();
@@ -1550,7 +1553,12 @@ class Game {
     let ticks = 0;
     while (this.accumulated >= PHYSICS_STEP && ticks < CONFIG.MAX_PHYSICS_CATCHUP) {
       this.gameTime += PHYSICS_STEP;
-      this.updatePhysics(PHYSICS_STEP);
+      try {
+        this.updatePhysics(PHYSICS_STEP);
+      } catch (e) {
+        // Never let a physics error kill the game loop
+        console.warn('Physics error:', e);
+      }
       this.accumulated -= PHYSICS_STEP;
       ticks++;
     }
@@ -1559,7 +1567,11 @@ class Game {
       this.accumulated = 0;
     }
 
-    this.render();
+    try {
+      this.render();
+    } catch (e) {
+      console.warn('Render error:', e);
+    }
     requestAnimationFrame((t) => this.loop(t));
   }
 }

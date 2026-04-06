@@ -12,7 +12,7 @@ export class AudioManager {
       } catch { return; }
     }
     if (this.ctx.state === 'suspended') {
-      this.ctx.resume();
+      this.ctx.resume().catch(() => {}); // iOS Safari may reject without user gesture
     }
   }
 
