@@ -90,18 +90,28 @@ const PROVIDERS = {
   },
 };
 
-const SYSTEM_PROMPT = `You are playing BOUNCE, a one-thumb arcade game. A ball falls on screen and you place horizontal surfaces to bounce it through golden rings.
+const SYSTEM_PROMPT = `You are playing BOUNCE, a one-thumb arcade game. A ball falls from the top of the screen. You place horizontal surfaces to bounce it through a golden ring gap.
 
-Each turn you receive the game state as JSON. Respond with ONLY a JSON object: {"x": <number>, "y": <number>} — the pixel coordinates where you want to place a surface.
+Each turn you receive game state JSON. Respond with ONLY: {"x": <number>, "y": <number>}
 
-Strategy:
-- Place surfaces BELOW the ball to bounce it toward the ring's gap
-- The gap direction is given in degrees (0=right, 90=down, -90=up, 180=left)
-- Fewer bounces = higher score multiplier
-- Surface decays after one hit, so place wisely
-- Don't place in dead zones (top 5% or bottom 8% of screen)
+The JSON contains:
+- ball.x, ball.y — current ball position
+- ball.predicted.x, ball.predicted.y — where the ball will be in 0.4 seconds
+- ring.gapX, ring.gapY — the pixel position the ball must pass through to score
+- liveSurfaces — surfaces already placed (don't stack on them)
+- screen.w, screen.h — screen dimensions
 
-Respond with ONLY the JSON coordinates. No explanation.`;
+HOW TO PLAY:
+1. Place the surface slightly below ball.predicted (intercept the falling ball)
+2. Offset the surface X toward ring.gapX so the ball bounces in that direction
+3. Good placement: x near ball.predicted.x + half the distance toward ring.gapX, y = ball.predicted.y + 40
+
+CONSTRAINTS:
+- y must be between screen.h * 0.07 and screen.h * 0.92
+- x must be between 30 and screen.w - 30
+- Don't place at same position as a liveSurface
+
+Respond with ONLY the JSON. No explanation.`;
 
 export class AIPlayer {
   constructor() {
@@ -111,7 +121,7 @@ export class AIPlayer {
     this.enabled = false;
     this.thinking = false;
     this.lastCallTime = 0;
-    this.callInterval = 1.5;
+    this.callInterval = 0.8;
     this.error = null;
     this._runGen = 0; // increments each resetForRun to invalidate stale Promises
     this._load();

@@ -191,6 +191,9 @@ class Game {
           this.fetchConstellations();
           break;
         }
+        // Block human taps when AI or demo is in control — exit button still works above
+        if (this.aiPlayer.enabled || this.settings.aiDemoEnabled) break;
+
         if (this.isInDeadZone(y)) {
           // Dead zone rejection — subtle flash so player knows why nothing happened
           this.ui.addSurfaceFlash(x, y, '#ff5050');
@@ -294,6 +297,33 @@ class Game {
       this.state = State.MENU;
       this.fetchConstellations();
     }
+  }
+
+  /** Direct surface placement bypassing human-tap guard — used by AI/demo agents. */
+  placeSurfaceDirect(x, y) {
+    if (this.state !== 'DROPPING' && this.state !== 'RING_HIT') return false;
+    if (this.isInDeadZone(y)) return false;
+    const removedSurface = this.surfaces.tryRemoveAt(x, y);
+    if (removedSurface) return false; // don't accidentally remove a surface
+    if (this.surfaces.surfaces.length >= CONFIG.MAX_SURFACES) {
+      const oldest = this.surfaces.surfaces.find(s => !s.hit && !s.removed);
+      if (oldest) oldest.removed = true;
+    }
+    const now = this.gameTime;
+    if (now - this.lastPlaceTime < CONFIG.SURFACE_COMBO_WINDOW) {
+      this.placeCombo = Math.min(this.placeCombo + 1, CONFIG.SURFACE_COMBO_MAX);
+    } else {
+      this.placeCombo = 0;
+    }
+    this.lastPlaceTime = now;
+    this.surfaces.place(x, y, this.renderer.scale, this.scoreManager.round, this.renderer.gameWidth, this.placeCombo, null);
+    this.recorder.recordSurface(x, y, this.gameTime);
+    this._playAudio('playPlace', y / this.renderer.gameHeight);
+    this._vibrate(CONFIG.PLACE_VIBRATE);
+    this.ui.addSurfaceFlash(x, y);
+    this.ui.addRipple(x, y);
+    if (window.BounceAgent) window.BounceAgent._notifySurfacePlaced(x, y);
+    return true;
   }
 
   isInDeadZone(y) {
@@ -900,7 +930,7 @@ class Game {
           } else {
             this.aiPlayer.update(this.gameTime, window.BounceAgent, { allowStationary: true }).then(result => {
               if (result && this.state === State.DROPPING && this.aiWaitingForFirstPlacement) {
-                this.handleTap(result.x, result.y);
+                this.placeSurfaceDirect(result.x, result.y);
                 this.aiWaitingForFirstPlacement = false;
               }
             });
@@ -950,16 +980,16 @@ class Game {
         if (this.aiPlayer.enabled && this.ball && this.ball.alive) {
           this.aiPlayer.update(this.gameTime, window.BounceAgent).then(result => {
             if (result && this.state === State.DROPPING) {
-              this.handleTap(result.x, result.y);
+              this.placeSurfaceDirect(result.x, result.y);
             }
           });
         }
 
-        // AI demo auto-play — place surfaces automatically
+        // AI demo auto-play — reactive: place whenever no live surface exists below ball
         if (this.settings.aiDemoEnabled && this.ball && this.ball.alive) {
           this.aiDemoPlaceTimer += dt;
-          // Place a surface every ~0.9s when ball is clearly falling downward
-          if (this.aiDemoPlaceTimer >= 0.9 && this.ball.vy > 100 * this.ball.scale) {
+          // Throttle to max once per 0.25s to avoid spamming; autoPlace() self-guards
+          if (this.aiDemoPlaceTimer >= 0.25 && this.ball.vy > 0) {
             this.aiDemoPlaceTimer = 0;
             if (window.BounceAgent) {
               window.BounceAgent.autoPlace();

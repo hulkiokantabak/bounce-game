@@ -218,12 +218,9 @@ export class AgentAPI {
     return false;
   }
 
-  /** Place a surface at (x, y) — only works during DROPPING state */
+  /** Place a surface at (x, y) — bypasses human-tap guard, used by agents */
   placeSurface(x, y) {
-    if (this._game.state !== 'DROPPING' && this._game.state !== 'RING_HIT') return false;
-    if (this._game.isInDeadZone(y)) return false;
-    this.tap(x, y);
-    return true;
+    return this._game.placeSurfaceDirect(x, y);
   }
 
   /** Check if the game is ready to accept a restart */
@@ -502,31 +499,44 @@ export class AgentAPI {
     const gw = g.renderer.gameWidth;
     const gh = g.renderer.gameHeight;
 
+    // Predict where the ball will be in 0.4s
+    const pred = ball && ball.alive ? this.predictBall(0.4) : null;
+
+    // Compute the gap opening position on screen — this is where the ball needs to pass through
+    const gapOpenX = ring ? Math.round(ring.cx + Math.cos(ring.gapCenter) * ring.radius) : null;
+    const gapOpenY = ring ? Math.round(ring.cy + Math.sin(ring.gapCenter) * ring.radius) : null;
+
     return {
-      playing: g.state === 'DROPPING',
-      round: g.scoreManager.round,
-      score: g.scoreManager.score,
-      streak: g.scoreManager.streak,
+      screen: { w: gw, h: gh },
       ball: ball && ball.alive ? {
         x: Math.round(ball.x),
         y: Math.round(ball.y),
         vx: Math.round(ball.vx),
         vy: Math.round(ball.vy),
-        type: ball.ballType,
         falling: ball.vy > 0,
+        // Where ball will be in 0.4s — place surface near here
+        predicted: pred ? { x: Math.round(pred.x), y: Math.round(pred.y) } : null,
       } : null,
       ring: ring ? {
-        x: Math.round(ring.cx),
-        y: Math.round(ring.cy),
-        gapDeg: Math.round(ring.gapCenter * 180 / Math.PI),
-        event: ring.event,
+        cx: Math.round(ring.cx),
+        cy: Math.round(ring.cy),
+        // The gap opening — ball must pass through this point
+        gapX: gapOpenX,
+        gapY: gapOpenY,
       } : null,
-      surfaces: g.surfaces.surfaces.filter(s => !s.removed && !s.hit).length,
-      screen: { w: gw, h: gh },
+      // Live surfaces already on screen (avoid stacking)
+      liveSurfaces: g.surfaces.surfaces
+        .filter(s => !s.removed && !s.hit && !s.decaying)
+        .map(s => ({ x: Math.round(s.x), y: Math.round(s.y) })),
     };
   }
 
-  /** Tutorial mode — auto-places a surface under the ball to guide it toward the ring */
+  /**
+   * Autoplay — places a surface to intercept the falling ball and keep it alive.
+   * Uses predictPath() to find the ball's actual position at interceptY (handles wall
+   * bounces). Biases surface center toward the ring gap by up to surfaceHalfLength
+   * without losing the ball — maximum possible gap-aim within physics constraints.
+   */
   autoPlace() {
     const g = this._game;
     if (g.state !== 'DROPPING') return false;
@@ -539,23 +549,45 @@ export class AgentAPI {
     const gw = g.renderer.gameWidth;
     const gh = g.renderer.gameHeight;
 
-    // Predict where ball will be in ~0.5s (further ahead for better placement)
-    const lookAhead = 0.45;
-    const gravity = CONFIG.GRAVITY * ball.scale * (ball.speedMult || 1) * (ball.gravityMult || 1);
-    const predX = ball.x + ball.vx * lookAhead;
-    const predY = ball.y + ball.vy * lookAhead + 0.5 * gravity * lookAhead * lookAhead;
+    // Don't stack — one live unbroken surface below the ball is enough
+    const liveSurfaces = g.surfaces.surfaces.filter(s => !s.hit && !s.removed && !s.decaying && s.y > ball.y);
+    if (liveSurfaces.length > 0) return false;
 
-    // Offset surface toward ring — stronger when ball is far from ring
-    const dx = ring.cx - predX;
-    const offsetStrength = Math.min(Math.abs(dx) / gw, 0.5) * 0.6;
-    const nudge = Math.sign(dx) * offsetStrength * gw * 0.15;
+    const distToRing = ring.cy - ball.y;
+    if (distToRing < 30) return false; // too close to ring to be useful
 
-    // Place surface ahead of ball (below its predicted position)
-    const placeX = Math.max(30, Math.min(gw - 30, predX + nudge));
-    const placeY = Math.max(gh * 0.12, Math.min(gh * 0.88, predY + 60 * ball.scale));
+    // If ball is already headed toward the ring gap, let it through — don't intercept
+    const approach = this.analyzeRingApproach();
+    if (approach && approach.willThread) return false;
 
-    // Don't place if surface would be below the ring (waste)
-    if (placeY > ring.cy + ring.outerRadius + 50) return false;
+    // Intercept at 40% of the way from ball to ring
+    const interceptY = ball.y + distToRing * 0.4;
+
+    // Use predictPath to find actual ball X at interceptY (accounts for wall bounces)
+    const path = this.predictPath(120, 1 / 60);
+    const interceptPoint = path.find(p => p.y >= interceptY);
+    if (!interceptPoint) return false;
+    const ballXAtIntercept = interceptPoint.x;
+
+    // Gap opening position — where ball needs to end up
+    const gapX = ring.cx + Math.cos(ring.gapCenter) * ring.radius;
+
+    // Surface half-length (same formula used by surface.js)
+    const surfHalfLen = (CONFIG.SURFACE_LENGTH * (ball.scale || 1)) / 2;
+
+    // Bias surface center toward gapX by up to surfHalfLen — ball still hits surface
+    const bias = Math.max(-surfHalfLen, Math.min(surfHalfLen, gapX - ballXAtIntercept));
+    const rawX = ballXAtIntercept + bias * 0.7;
+
+    const minX = 30;
+    const maxX = gw - 30;
+    const minY = gh * CONFIG.DEAD_ZONE_TOP + 1;
+    const maxY = gh * (1 - CONFIG.DEAD_ZONE_BOTTOM) - 1;
+
+    const placeX = Math.max(minX, Math.min(maxX, rawX));
+    const placeY = Math.max(minY, Math.min(maxY, interceptY));
+
+    if (placeY > ring.cy - ring.outerRadius) return false;
 
     return this.placeSurface(placeX, placeY);
   }
