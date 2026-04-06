@@ -92,8 +92,9 @@ export class AudioManager {
       const gain = this.ctx.createGain();
       osc.type = 'sawtooth';
       const startFreq = 300 + dir * 100;
+      const endFreq = Math.max(20, startFreq + dir * 200); // must be >0 for exponentialRamp
       osc.frequency.setValueAtTime(startFreq, now);
-      osc.frequency.exponentialRampToValueAtTime(startFreq + dir * 200, now + 0.08);
+      osc.frequency.exponentialRampToValueAtTime(endFreq, now + 0.08);
       gain.gain.setValueAtTime(0.08, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
       osc.connect(gain);

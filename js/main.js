@@ -141,7 +141,11 @@ class Game {
     if (window.BounceAgent && window.BounceAgent.isSilent) return;
     if (!this.settings.soundEnabled) return;
     if (typeof this.audio[method] === 'function') {
-      this.audio[method](...args);
+      try {
+        this.audio[method](...args);
+      } catch (e) {
+        // Audio errors must never crash the game loop
+      }
     }
   }
 
