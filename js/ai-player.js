@@ -118,8 +118,8 @@ const PROVIDERS = {
     ],
     buildRequest(apiKey, model, systemPrompt, userMsg) {
       return {
-        urlOverride: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-        headers: { 'content-type': 'application/json' },
+        urlOverride: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify({
           system_instruction: { parts: [{ text: systemPrompt }] },
           contents: [{ parts: [{ text: userMsg }] }],
@@ -239,7 +239,20 @@ export class AIPlayer {
   }
 
   setCustomUrl(url) {
-    this.customUrl = url.trim();
+    const trimmed = url.trim();
+    if (trimmed) {
+      try {
+        const parsed = new URL(trimmed);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          this.error = 'URL must use http:// or https://';
+          return;
+        }
+      } catch {
+        this.error = 'Invalid URL';
+        return;
+      }
+    }
+    this.customUrl = trimmed;
     this.error = null;
     this._save();
   }

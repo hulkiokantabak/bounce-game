@@ -408,18 +408,11 @@ export class UI {
     // Score — top-left, monospace, brighter at 70%, pulse on update
     const baseSize = Math.round(18 * scale);
     const pulse = scoreManager.scorePulse; // 0→1, decays over 0.25s
-
-    ctx.save();
-
-    // Scale transform: score pops up to 1.25× then settles
     const scaleFactor = 1 + pulse * 0.25;
-    ctx.translate(margin, margin);
-    ctx.scale(scaleFactor, scaleFactor);
-    ctx.translate(-margin, -margin);
 
+    // Score number: translate to anchor, scale, draw at origin — no position drift
+    ctx.save();
     ctx.globalAlpha = 0.7 + pulse * 0.25;
-
-    // Personal best flash: gold color when PB exceeded; golden tint at peak pulse too
     if (this.pbFlashTimer > 0) {
       ctx.fillStyle = CONFIG.RING_COLOR;
       ctx.globalAlpha = 0.7 + 0.3 * this.pbFlashTimer;
@@ -428,22 +421,25 @@ export class UI {
     } else {
       ctx.fillStyle = '#ffffff';
     }
-
     ctx.font = `${baseSize}px monospace`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    ctx.fillText(scoreManager.score.toLocaleString(), margin, margin);
+    ctx.translate(margin, margin);
+    ctx.scale(scaleFactor, scaleFactor);
+    ctx.fillText(scoreManager.score.toLocaleString(), 0, 0);
+    ctx.restore();
 
-    // Round indicator — hidden on rounds 1-2 to reduce noise for beginners
-    const roundY = margin + size + 4 * scale;
+    // Round indicator and streak — not scaled, drawn at normal coordinates
+    const roundY = margin + baseSize + 4 * scale;
+    ctx.save();
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
     if (scoreManager.round >= 3) {
       ctx.globalAlpha = 0.25;
       ctx.fillStyle = '#ffffff';
       ctx.font = `${Math.round(12 * scale)}px monospace`;
       ctx.fillText(`R${scoreManager.round}`, margin, roundY);
     }
-
-    // Streak at threshold 3+
     if (scoreManager.streak >= CONFIG.STREAK_DISPLAY_THRESHOLD) {
       ctx.globalAlpha = 0.3;
       ctx.fillStyle = '#ffffff';
@@ -451,7 +447,6 @@ export class UI {
       const streakX = scoreManager.round >= 3 ? margin + 30 * scale : margin;
       ctx.fillText(`\u00d7${scoreManager.streak} streak`, streakX, roundY);
     }
-
     ctx.restore();
 
     // Score pops

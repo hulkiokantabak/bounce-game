@@ -278,7 +278,7 @@ class Ring {
       // Faint gap notch — barely visible hint of where the gap will be
       ctx.globalAlpha = brightness * 0.12;
       ctx.lineWidth = this.thickness * 0.5;
-      ctx.strokeStyle = '#0a0a0f'; // draw over with background color to cut a notch
+      ctx.strokeStyle = CONFIG.BG_COLOR; // draw over with background color to cut a notch
       ctx.beginPath();
       ctx.arc(this.cx, this.cy, this.radius, gapStart, gapEnd);
       ctx.stroke();
