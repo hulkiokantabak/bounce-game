@@ -407,21 +407,29 @@ export class UI {
 
     // Score — top-left, monospace, brighter at 70%, pulse on update
     const baseSize = Math.round(18 * scale);
-    const pulseExtra = scoreManager.scorePulse * Math.min(scoreManager.lastScoreGain / 100, 3) * 4 * scale;
-    const size = baseSize + pulseExtra;
+    const pulse = scoreManager.scorePulse; // 0→1, decays over 0.25s
 
     ctx.save();
-    ctx.globalAlpha = 0.7;
 
-    // Personal best flash: gold color when PB exceeded
+    // Scale transform: score pops up to 1.25× then settles
+    const scaleFactor = 1 + pulse * 0.25;
+    ctx.translate(margin, margin);
+    ctx.scale(scaleFactor, scaleFactor);
+    ctx.translate(-margin, -margin);
+
+    ctx.globalAlpha = 0.7 + pulse * 0.25;
+
+    // Personal best flash: gold color when PB exceeded; golden tint at peak pulse too
     if (this.pbFlashTimer > 0) {
       ctx.fillStyle = CONFIG.RING_COLOR;
       ctx.globalAlpha = 0.7 + 0.3 * this.pbFlashTimer;
+    } else if (pulse > 0.6) {
+      ctx.fillStyle = CONFIG.RING_COLOR;
     } else {
       ctx.fillStyle = '#ffffff';
     }
 
-    ctx.font = `${Math.round(size)}px monospace`;
+    ctx.font = `${baseSize}px monospace`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.fillText(scoreManager.score.toLocaleString(), margin, margin);
@@ -718,7 +726,7 @@ export class UI {
     ctx.restore();
   }
 
-  renderRunEnd(ctx, gameWidth, gameHeight, scale, scoreManager, timer, lifetime, runDuration) {
+  renderRunEnd(ctx, gameWidth, gameHeight, scale, scoreManager, timer, lifetime, runDuration, runRings, runClean) {
     const p1End = CONFIG.RUN_END_PAUSE;
     const p2End = p1End + CONFIG.RUN_END_TRAIL_HOLD;
     const p3End = p2End + CONFIG.RUN_END_SCORE_FADE;
@@ -738,15 +746,21 @@ export class UI {
       ctx.font = `bold ${Math.round(36 * scale)}px monospace`;
       ctx.fillText(scoreManager.score.toLocaleString(), gameWidth / 2, gameHeight * 0.35);
 
-      // Rounds + duration
-      ctx.globalAlpha = fadeProgress * 0.5;
-      ctx.font = `${Math.round(16 * scale)}px monospace`;
-      ctx.fillText(`${scoreManager.round} ${scoreManager.round === 1 ? 'round' : 'rounds'}`, gameWidth / 2, gameHeight * 0.35 + 40 * scale);
-
-      if (runDuration > 0) {
+      // Performance card — compact single line: R4 · 5 rings · 3 clean · ×7 · 14s
+      if (runRings > 0 || scoreManager.round > 1) {
+        const parts = [];
+        parts.push(`R${scoreManager.round}`);
+        if (runRings > 0) parts.push(`${runRings} ring${runRings !== 1 ? 's' : ''}`);
+        if (runClean > 0) parts.push(`${runClean} clean`);
+        if (scoreManager.longestStreak >= CONFIG.STREAK_DISPLAY_THRESHOLD) parts.push(`\u00d7${scoreManager.longestStreak} streak`);
+        if (runDuration > 0) parts.push(`${Math.round(runDuration)}s`);
+        ctx.globalAlpha = fadeProgress * 0.45;
+        ctx.font = `${Math.round(13 * scale)}px monospace`;
+        ctx.fillText(parts.join(' \u00b7 '), gameWidth / 2, gameHeight * 0.35 + 40 * scale);
+      } else if (runDuration > 0) {
         ctx.globalAlpha = fadeProgress * 0.3;
         ctx.font = `${Math.round(13 * scale)}px monospace`;
-        ctx.fillText(`${Math.round(runDuration)}s`, gameWidth / 2, gameHeight * 0.35 + 62 * scale);
+        ctx.fillText(`${Math.round(runDuration)}s`, gameWidth / 2, gameHeight * 0.35 + 40 * scale);
       }
 
       // Personal best line
@@ -755,12 +769,12 @@ export class UI {
         ctx.globalAlpha = fadeProgress * 0.7;
         ctx.fillStyle = CONFIG.RING_COLOR;
         ctx.font = `bold ${Math.round(14 * scale)}px monospace`;
-        ctx.fillText('NEW BEST!', gameWidth / 2, gameHeight * 0.35 + 90 * scale + extraY);
+        ctx.fillText('NEW BEST!', gameWidth / 2, gameHeight * 0.35 + 68 * scale + extraY);
       } else if (scoreManager.personalBest > 0) {
         ctx.globalAlpha = fadeProgress * 0.25;
         ctx.fillStyle = '#ffffff';
         ctx.font = `${Math.round(13 * scale)}px monospace`;
-        ctx.fillText(`best: ${scoreManager.personalBest.toLocaleString()}`, gameWidth / 2, gameHeight * 0.35 + 90 * scale + extraY);
+        ctx.fillText(`best: ${scoreManager.personalBest.toLocaleString()}`, gameWidth / 2, gameHeight * 0.35 + 68 * scale + extraY);
       }
 
       // Forward hook — give player a reason to retry
@@ -770,7 +784,7 @@ export class UI {
         ctx.globalAlpha = fadeProgress * 0.2;
         ctx.fillStyle = '#ffffff';
         ctx.font = `${Math.round(11 * scale)}px monospace`;
-        ctx.fillText(`${diff} round${diff > 1 ? 's' : ''} from your best`, gameWidth / 2, gameHeight * 0.35 + 110 * scale + extraY);
+        ctx.fillText(`${diff} round${diff > 1 ? 's' : ''} from your best`, gameWidth / 2, gameHeight * 0.35 + 90 * scale + extraY);
       }
 
       // Context-sensitive lifetime stat
@@ -785,7 +799,7 @@ export class UI {
         ctx.globalAlpha = fadeProgress * 0.15;
         ctx.fillStyle = '#ffffff';
         ctx.font = `${Math.round(11 * scale)}px monospace`;
-        ctx.fillText(lifetimeLine, gameWidth / 2, gameHeight * 0.35 + 130 * scale + extraY);
+        ctx.fillText(lifetimeLine, gameWidth / 2, gameHeight * 0.35 + 110 * scale + extraY);
       }
 
       ctx.restore();

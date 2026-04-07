@@ -268,10 +268,19 @@ class Ring {
         }
       }
     } else {
-      // Ring B before A threaded: full ring, dimmer
+      // Ring B before A threaded: full ring, dimmer; faint gap notch hints at hidden gap
+      const gapStart = this.gapCenter - this.gapAngle / 2;
+      const gapEnd = this.gapCenter + this.gapAngle / 2;
       ctx.globalAlpha = brightness * 0.4;
       ctx.beginPath();
       ctx.arc(this.cx, this.cy, this.radius, 0, Math.PI * 2);
+      ctx.stroke();
+      // Faint gap notch — barely visible hint of where the gap will be
+      ctx.globalAlpha = brightness * 0.12;
+      ctx.lineWidth = this.thickness * 0.5;
+      ctx.strokeStyle = '#0a0a0f'; // draw over with background color to cut a notch
+      ctx.beginPath();
+      ctx.arc(this.cx, this.cy, this.radius, gapStart, gapEnd);
       ctx.stroke();
     }
 

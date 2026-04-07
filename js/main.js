@@ -43,6 +43,7 @@ class Game {
     this.aiPlayer = new AIPlayer();
     this.settings.initAIPlayer(this.aiPlayer);
     this.runBounceTotal = 0;
+    this.runCleanCount = 0;
 
     // AI demo state
     this.aiDemoPlaceTimer = 0;
@@ -62,6 +63,9 @@ class Game {
 
     // RING_HIT
     this.ringHitTimer = 0;
+
+    // Spawn pulse — expanding ring on DROPPING entry
+    this.spawnPulseTimer = -1;
 
     // RUN_OVER
     this.runEndTimer = 0;
@@ -109,6 +113,7 @@ class Game {
     this.fetchConstellations();
 
     this.input.onTap = (x, y) => this.handleTap(x, y);
+    this.input.onHoldRemove = (x, y) => this.handleHoldRemove(x, y);
     this.ui.initMenuDust(this.lifetime);
     this.ghostTrails = this.lifetime.generateGhostTrails();
 
@@ -148,7 +153,7 @@ class Game {
     }
   }
 
-  handleTap(x, y) {
+  handleTap(x, y, isMouse = false) {
     this.audio.init();
 
     switch (this.state) {
@@ -195,11 +200,14 @@ class Game {
           break;
         }
         {
-          // Tap near an existing surface? Remove it instead of placing a new one.
-          const removedSurface = this.surfaces.tryRemoveAt(x, y);
-          if (removedSurface) {
-            this.ui.addSurfaceFlash(x, y, '#ff8855');
-            break;
+          // Mouse click near an existing surface removes it instantly.
+          // Touch removal requires a 180ms hold (handled via onHoldRemove).
+          if (isMouse) {
+            const removedSurface = this.surfaces.tryRemoveAt(x, y);
+            if (removedSurface) {
+              this.ui.addSurfaceFlash(x, y, '#ff8855');
+              break;
+            }
           }
 
           // Cap surfaces to prevent performance issues
@@ -291,6 +299,16 @@ class Game {
     if (this.replayPlayer.finished) {
       this.state = State.MENU;
       this.fetchConstellations();
+    }
+  }
+
+  /** Touch hold (180ms) on an existing surface removes it. */
+  handleHoldRemove(x, y) {
+    if (this.state !== State.DROPPING && this.state !== State.RING_HIT) return;
+    if (this.aiPlayer.enabled || this.settings.aiDemoEnabled) return;
+    const removed = this.surfaces.tryRemoveAt(x, y);
+    if (removed) {
+      this.ui.addSurfaceFlash(x, y, '#ff8855');
     }
   }
 
@@ -390,7 +408,9 @@ class Game {
     this.runEndTimer = 0;
     this.runEndInputReady = false;
     this.ringHitTimer = 0;
+    this.spawnPulseTimer = 0;
     this.runBounceTotal = 0;
+    this.runCleanCount = 0;
     this.runRingsThreaded = 0;
     this.moodBounceCounter = 0;
     this._resetDangerZone();
@@ -432,6 +452,7 @@ class Game {
     }
 
     this.state = State.DROPPING;
+    this.spawnPulseTimer = 0;
     this._resetDangerZone();
 
     // Reset wind for new round
@@ -727,6 +748,7 @@ class Game {
 
     // CLEAN success effect — brief golden pulse + sparkle chime
     if (isClean) {
+      this.runCleanCount++;
       this.renderer.shake(0.5);
       this.ui.triggerCleanFlash();
       this._playAudio('playCleanChime');
@@ -907,6 +929,12 @@ class Game {
 
       case State.DROPPING:
         if (!this.ball) break;
+
+        // Spawn pulse timer
+        if (this.spawnPulseTimer >= 0) {
+          this.spawnPulseTimer += dt;
+          if (this.spawnPulseTimer > 0.5) this.spawnPulseTimer = -1;
+        }
 
         // AI waiting for first surface — freeze ball until API responds (max 1s)
         if (this.aiWaitingForFirstPlacement) {
@@ -1301,6 +1329,19 @@ class Game {
     }
 
     if (this.state === State.DROPPING || this.state === State.RING_HIT) {
+      // Spawn pulse — single expanding ring around ball spawn point
+      if (this.spawnPulseTimer >= 0 && this.ball) {
+        const sp = this.spawnPulseTimer / 0.5;
+        ctx.save();
+        ctx.globalAlpha = (1 - sp) * 0.35;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5 * scale;
+        ctx.beginPath();
+        ctx.arc(this.ball.x, this.ball.y, (this.ball.radius + 40 * scale) * sp, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
       // Trajectory preview — dotted arc showing predicted path
       if (this.ball && this.ball.alive && this.ball.vy > 0) {
         const roundGravMult = this.ball.round <= 1 ? CONFIG.GRAVITY_ROUND1_MULT : 1.0;
@@ -1334,8 +1375,6 @@ class Game {
       }
 
       this.ui.renderScore(ctx, gameWidth, gameHeight, scale, this.scoreManager, this.renderer.safeTop);
-      // Bounce multiplier preview
-      this.ui.renderBounceMultiplier(ctx, this.ball, scale, this.scoreManager.bounceCount);
 
       // Exit button — back arrow top-left
       this.settings.renderExitButton(ctx, gameWidth, gameHeight, scale, this.renderer.safeTop);
@@ -1477,9 +1516,11 @@ class Game {
 
     if (isRunOver) {
       this.ui._runEndBounces = this.runBounceTotal;
-      this.ui.renderRunEnd(ctx, gameWidth, gameHeight, scale, this.scoreManager, this.runEndTimer, this.lifetime, this.runDuration);
-      // Exit button on run-over screen
-      this.settings.renderExitButton(ctx, gameWidth, gameHeight, scale, this.renderer.safeTop);
+      this.ui.renderRunEnd(ctx, gameWidth, gameHeight, scale, this.scoreManager, this.runEndTimer, this.lifetime, this.runDuration, this.runRingsThreaded, this.runCleanCount);
+      // Exit button on run-over screen — held back during trail beat so nothing occludes the art
+      if (this.runEndTimer >= CONFIG.RUN_END_PAUSE + CONFIG.RUN_END_TRAIL_HOLD) {
+        this.settings.renderExitButton(ctx, gameWidth, gameHeight, scale, this.renderer.safeTop);
+      }
     }
 
     ctx.restore();

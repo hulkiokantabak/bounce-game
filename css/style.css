@@ -451,3 +451,45 @@ canvas {
   background: rgba(255, 255, 255, 0.06);
   margin: 16px 0;
 }
+
+/* Collapsible settings section (AI Player) */
+
+.settings-collapsible {
+  border: none;
+  outline: none;
+}
+
+.settings-collapsible-summary {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 0;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.settings-collapsible-summary::-webkit-details-marker {
+  display: none;
+}
+
+.settings-collapsible-summary::after {
+  content: '+';
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.25);
+  line-height: 1;
+}
+
+.settings-collapsible[open] .settings-collapsible-summary::after {
+  content: '\2212'; /* − */
+}
+
+.settings-collapsible[open] .settings-collapsible-summary {
+  margin-bottom: 12px;
+}

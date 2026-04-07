@@ -132,7 +132,7 @@ export const CONFIG = {
   BG_COLOR_WARM: '#0d0a12',       // warm indigo tint for later rounds
   BG_WARM_START_ROUND: 4,
   BG_WARM_FULL_ROUND: 20,
-  TRAIL_BASE_COLORS: ['#fff5e6', '#fff5e6', '#fff5e6', '#fff0d0', '#fff0d0', '#fff0d0', '#ffe8b8', '#ffe0a0'],
+  TRAIL_BASE_COLORS: ['#fff5e6', '#fff5e6', '#fff5e6', '#fff0d0', '#fff0d0', '#fff0d0', '#ffe8b8', '#ffe0a0', '#ffd880', '#ffc955', '#ffb830'],
   GLOW_BOOST_ROUND: 5,            // ball glow +20% at this round
   TRAIL_WIDTH_BOOST_ROUND: 10,    // trail width 2 → 2.5 at this round
   RING_PULSE_SPEED_MAX: 1.8,
