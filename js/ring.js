@@ -1,5 +1,12 @@
 import { CONFIG } from './config.js';
 
+/** Normalize an angle difference to [-π, π]. */
+export function normalizeAngleDiff(diff) {
+  while (diff > Math.PI) diff -= Math.PI * 2;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  return diff;
+}
+
 class Ring {
   constructor(cx, cy, radius, thickness, gapAngle, gapCenter, scale, isDual, isRingA, round) {
     this.cx = cx;
@@ -92,25 +99,19 @@ class Ring {
   }
 
   isInGap(angle) {
-    let diff = angle - this.gapCenter;
-    while (diff > Math.PI) diff -= Math.PI * 2;
-    while (diff < -Math.PI) diff += Math.PI * 2;
+    const diff = normalizeAngleDiff(angle - this.gapCenter);
     return Math.abs(diff) < this.gapAngle / 2;
   }
 
   getGapProximity(angle) {
     // Returns 0-1 how close to the gap edge (1 = dead center, 0 = on the edge)
-    let diff = angle - this.gapCenter;
-    while (diff > Math.PI) diff -= Math.PI * 2;
-    while (diff < -Math.PI) diff += Math.PI * 2;
+    const diff = normalizeAngleDiff(angle - this.gapCenter);
     return 1 - Math.abs(diff) / (this.gapAngle / 2);
   }
 
   isNearGap(angle) {
     // Within 15° of gap edge but on the arc side
-    let diff = angle - this.gapCenter;
-    while (diff > Math.PI) diff -= Math.PI * 2;
-    while (diff < -Math.PI) diff += Math.PI * 2;
+    const diff = normalizeAngleDiff(angle - this.gapCenter);
     const nearDeg = 15 * (Math.PI / 180);
     const halfGap = this.gapAngle / 2;
     return Math.abs(diff) > halfGap && Math.abs(diff) < halfGap + nearDeg;

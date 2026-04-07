@@ -31,6 +31,7 @@
  */
 
 import { CONFIG } from './config.js';
+import { normalizeAngleDiff } from './ring.js';
 
 export class AgentAPI {
   constructor(game) {
@@ -422,10 +423,7 @@ export class AgentAPI {
 
       if (dist >= ring.innerRadius && dist <= ring.outerRadius) {
         const angle = Math.atan2(dy, dx);
-        let diff = angle - ring.gapCenter;
-        while (diff > Math.PI) diff -= Math.PI * 2;
-        while (diff < -Math.PI) diff += Math.PI * 2;
-
+        const diff = normalizeAngleDiff(angle - ring.gapCenter);
         const inGap = Math.abs(diff) < ring.gapAngle / 2;
         return {
           willThread: inGap,
